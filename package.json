@@ -8,7 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest --watchAll",
-    "build": "expo export:web && ncc build web-build/index.html -o dist"
+    "build": "expo export && ncc build dist/web/index.js -o .vercel/output/functions/render.func && cp -r dist/web/assets .vercel/output/static"
   },
   "jest": {
     "preset": "jest-expo"
