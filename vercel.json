@@ -1,9 +1,3 @@
 {
-  "version": 2,
-  "framework": "expo",
-  "build": {
-    "env": {
-      "EXPO_PUBLIC_URL": "https://meuapp.vercel.app"
-    }
-  }
+  "version": 2
 }
