@@ -1,16 +1,9 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/ncc",
-      "config": {}
+  "framework": "expo",
+  "build": {
+    "env": {
+      "EXPO_PUBLIC_URL": "https://meuapp.vercel.app"
     }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/.vercel/output/functions/render.func"
-    }
-  ]
+  }
 }
