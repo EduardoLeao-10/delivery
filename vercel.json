@@ -12,9 +12,5 @@
       "src": "/(.*)",
       "dest": "/.vercel/output/functions/render.func"
     }
-  ],
-  "output": {
-    "sourceMap": true,  
-    "includeFiles": ["dist/**"]
-  }
+  ]
 }
