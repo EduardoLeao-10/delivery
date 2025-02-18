@@ -8,7 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest --watchAll",
-    "build": "npx expo export"
+    "build": "expo export:web"
   },
   "jest": {
     "preset": "jest-expo"
