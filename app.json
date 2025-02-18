@@ -2,7 +2,8 @@
   "expo": {
     "name": "delivery-system-web",
     "web": {
-      "publicUrl": "https://meuapp.vercel.app" 
+      "publicUrl": "https://meuapp.vercel.app",
+      "outputDir": "dist"
     }
   }
 }
