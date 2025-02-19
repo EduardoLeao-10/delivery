@@ -1,9 +1,16 @@
 {
   "version": 2,
-  "routes": [
+  "public": true,
+  "builds": [
     {
-      "src": "/(.*)",
-      "dest": "/dist/$1"  
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist" 
+      }
     }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/index.html" } 
   ]
 }
