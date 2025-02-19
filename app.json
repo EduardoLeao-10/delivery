@@ -2,8 +2,8 @@
   "expo": {
     "name": "delivery-system-web",
     "web": {
-      "bundler": "metro", 
-      "outputDir": "dist", 
+      "bundler": "metro",
+      "outputDir": "dist",
       "publicUrl": "https://meuapp.vercel.app"
     }
   }
