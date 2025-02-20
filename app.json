@@ -1,10 +1,13 @@
 {
   "expo": {
     "name": "delivery-system-web",
+    "slug": "delivery-system-web",
+    "version": "1.0.0",
+    "platforms": ["web"],
     "web": {
       "bundler": "metro",
       "outputDir": "dist",
-      "publicUrl": "https://meuapp.vercel.app"
+      "publicUrl": "/"
     }
   }
 }
