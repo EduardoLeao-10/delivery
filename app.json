@@ -8,6 +8,9 @@
       "bundler": "metro",
       "outputDir": "dist",
       "publicUrl": "/"
-    }
+    },
+    "assetBundlePatterns": [
+      "**/*"  
+    ]
   }
 }
