@@ -1,183 +1,186 @@
 // src/app/Orders/styles.tsx
-// src/app/Orders/styles.tsx
-import styled from 'styled-components/native';
-import { Dimensions } from 'react-native';
+import styled from "styled-components";
 
-// Cores - Defina suas cores aqui para facilitar a manutenção
-const primary = '#007bff';
-const primaryLight = '#63a4ff';
-const primaryDark = '#0056b3';
-const secondary = '#6c757d';
-const secondaryLight = '#9ca3af';
-const secondaryDark = '#495057';
-const success = '#28a745';
-const danger = '#dc3545';
-const warning = '#ffc107';
-const info = '#17a2b8';
-const light = '#f8f9fa';
-const dark = '#343a40';
-const white = '#fff';
-const gray100 = '#f8f9fa';
-const gray200 = '#e9ecef';
-const gray300 = '#dee2e6';
-const gray400 = '#ced4da';
-const gray500 = '#adb5bd';
-const gray600 = '#6c757d';
-const gray700 = '#495057';
-const gray800 = '#343a40';
-const gray900 = '#212529';
+// Variáveis de Estilo (Temas)
+const colors = {
+    primary: "#007bff",      // Azul primário
+    secondary: "#6c757d",    // Cinza secundário
+    light: "#f8f9fa",        // Fundo claro
+    dark: "#343a40",         // Texto escuro
+    white: "#fff",           // Branco
+    gray: "#e9ecef",         // Cinza claro
+    success: "#28a745",      // Verde sucesso
+    danger: "#dc3545",       // Vermelho perigo
+    warning: "#ffc107",      // Amarelo aviso
+    info: "#17a2b8",         // Azul informação
+};
 
-// Espaçamento
-const spacingSm = 8;
-const spacingMd = 16;
-const spacingLg = 24;
-const spacingXl = 32;
+const spacing = {
+    xsmall: "4px",
+    small: "8px",
+    medium: "16px",
+    large: "24px",
+    xlarge: "32px",
+};
 
-// Tipografia
-const fontSizeSm = 12;
-const fontSizeMd = 16;
-const fontSizeLg = 20;
-const fontSizeXl = 24;
+const fontSize = {
+    xsmall: "12px",
+    small: "14px",
+    medium: "16px",
+    large: "18px",
+    xlarge: "20px",
+    title: "28px",          // Aumentei o tamanho do título
+    subtitle: "22px",
+};
 
-// Sombras (Opcional: adapte conforme necessário)
-const shadowSm = '0 1px 2px rgba(0, 0, 0, 0.1)';
-const shadowMd = '0 2px 4px rgba(0, 0, 0, 0.15)';
-const shadowLg = '0 4px 8px rgba(0, 0, 0, 0.2)';
+const borderRadius = {
+    small: "8px",
+    medium: "12px",
+    large: "16px",
+};
 
-// Layout Responsivo (Exemplo)
-const windowWidth = Dimensions.get('window').width;
-const isSmallScreen = windowWidth < 600;
-const isMediumScreen = windowWidth >= 600 && windowWidth < 992;
+const boxShadow = {
+    small: "0px 2px 4px rgba(0, 0, 0, 0.1)",
+    medium: "0px 4px 8px rgba(0, 0, 0, 0.15)",
+};
+
+const transition = {
+    fast: "0.2s ease-in-out",
+    normal: "0.3s ease-in-out",
+    slow: "0.5s ease-in-out",
+};
 
 // Container Principal
-export const Container = styled.View`
-  flex: 1;
-  background-color: ${light};
-  padding: ${spacingMd}px;
-  padding-bottom: 80px; /* Espaço para evitar que o conteúdo seja cortado pela barra inferior */
+export const Container = styled.div`
+  height: 100vh; /* Garante que ocupa toda a tela */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start; /* Garante que o conteúdo começa do topo */
+  padding: ${spacing.large};
+  background-color: ${colors.light};
+  border-radius: ${borderRadius.medium};
+  overflow: hidden; /* Evita scroll duplicado */
 `;
 
-// Título da Página
-export const Title = styled.Text`
-  font-size: ${fontSizeXl}px;
+// Título
+export const Title = styled.h1`
+  font-size: ${fontSize.title};
+  color: ${colors.dark};
+  margin-bottom: ${spacing.large};
   font-weight: bold;
-  color: ${dark};
-  margin-bottom: ${spacingLg}px;
   text-align: center;
-  /* Adicione mais estilos conforme necessário (ex: sombra do texto) */
-  text-shadow: 1px 1px 2px ${gray300};
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1); // Adicionei sombra ao texto
 `;
 
-// Subtítulo da Seção
-export const Subtitle = styled.Text`
-  font-size: ${fontSizeLg}px;
-  font-weight: 600;
-  color: ${gray700};
-  margin-top: ${spacingLg}px;
-  margin-bottom: ${spacingMd}px;
-  /* Estilo para telas menores (ex: diminuir a fonte) */
-  font-size: ${isSmallScreen ? fontSizeMd : fontSizeLg}px;
+// Novo container para a lista de pedidos com scroll
+export const OrdersListContainer = styled.div`
+  flex-grow: 1;
+  overflow-y: auto;
+  width: 100%;
+  max-height: calc(100vh - 150px); /* Ajuste conforme necessário */
+  padding-right: ${spacing.small};
+  
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: ${colors.gray};
+    border-radius: ${borderRadius.small};
+  }
+  &::-webkit-scrollbar-thumb {
+    background: ${colors.primary};
+    border-radius: ${borderRadius.small};
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: darken(${colors.primary}, 10%);
+  }
 `;
 
-interface OrderItemProps {
-  disabled?: boolean;
-}
+// Container de Itens do Pedido
+export const OrderItemContainer = styled.div`
+  background-color: ${colors.white};
+  padding: ${spacing.medium};
+  margin-bottom: ${spacing.medium};
+  border-radius: ${borderRadius.medium};
+  box-shadow: ${boxShadow.small};
+  width: 100%;
+  max-width: 600px;
+  border: 1px solid ${colors.gray}; // Adicionei borda sutil
+  transition: transform ${transition.fast}; // Adiciona uma pequena animação
 
-// Item da Lista de Pedidos
-export const OrderItem = styled.TouchableOpacity<OrderItemProps>`
-  background-color: ${white};
-  padding: ${spacingMd}px;
-  border-radius: 10px;
-  margin-bottom: ${spacingSm}px;
-  box-shadow: ${shadowSm};
-  /* Efeito hover (simulado) */
-  opacity: ${({ disabled = false }: { disabled?: boolean }) => (disabled ? 0.5 : 1)};
-  /* Estilos para telas menores (ex: aumentar a fonte) */
-  padding: ${isSmallScreen ? spacingLg : spacingMd}px;
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: ${boxShadow.medium};
+  }
 `;
 
-// Detalhes do Pedido (Container)
-export const OrderDetails = styled.View`
-  margin-top: ${spacingLg}px;
-  padding: ${spacingMd}px;
-  background-color: ${white};
-  border-radius: 10px;
-  box-shadow: ${shadowMd};
-`;
-
-// Detalhes de um Item do Pedido
-export const OrderItemDetails = styled.View`
-  margin-bottom: ${spacingSm}px;
-  padding: ${spacingMd}px;
-  background-color: ${gray100};
-  border-radius: 8px;
-  border-width: 1px;
-  border-color: ${gray300};
-`;
-
-// Total do Pedido
-export const Total = styled.Text`
-  font-size: ${fontSizeLg}px;
+// Texto do ID do Pedido
+export const OrderIdText = styled.p`
+  font-size: ${fontSize.large};
+  color: ${colors.primary};
   font-weight: bold;
-  color: ${dark};
-  margin-top: ${spacingMd}px;
+  margin-bottom: ${spacing.small};
+  text-transform: uppercase; // Transformei em maiúsculas
 `;
 
-// Modal de Edição
-export const EditModal = styled.View`
-  margin-top: ${spacingLg}px;
-  padding: ${spacingLg}px;
-  background-color: ${white};
-  border-radius: 10px;
-  box-shadow: ${shadowMd};
+// Texto dos Detalhes do Pedido
+export const OrderItemDetailsText = styled.p`
+  font-size: ${fontSize.medium};
+  color: ${colors.dark};
+  margin-bottom: ${spacing.xsmall};
+  line-height: 1.5;
 `;
 
-// Input de Texto
-export const Input = styled.TextInput`
-  border-width: 1px;
-  border-color: ${gray400};
-  border-radius: 8px;
-  padding: ${spacingMd}px;
-  margin-bottom: ${spacingLg}px;
-  font-size: ${fontSizeMd}px;
-  color: ${dark};
-  background-color: ${white}; /* Garante que o fundo seja branco */
+// Texto do Total do Pedido
+export const OrderTotalText = styled.p`
+  font-size: ${fontSize.large};
+  color: ${colors.success};
+  font-weight: bold;
+  margin-top: ${spacing.medium};
 `;
 
-interface ButtonStyledProps {
-  disabled?: boolean;
-}
+// Container dos Botões
+export const ButtonsContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-top: ${spacing.medium};
+`;
 
 // Botão Estilizado
-export const ButtonStyled = styled.TouchableOpacity<ButtonStyledProps>`
-  background-color: ${primary};
-  padding: ${spacingMd}px ${spacingLg}px;
-  border-radius: 8px;
-  align-items: center;
-  justify-content: center;
-  /* Efeito hover (simulado) */
-  opacity: ${({ disabled = false }: { disabled?: boolean }) => (disabled ? 0.5 : 1)};
+export const StyledButton = styled.button<{ variant?: "primary" | "danger" | 'secondary' }>`
+  background-color: ${(props) =>
+        props.variant === "danger" ? colors.danger : colors.primary};
+  color: ${colors.white};
+  padding: ${spacing.small} ${spacing.medium};
+  border: none;
+  border-radius: ${borderRadius.small};
+  font-size: ${fontSize.medium};
+  cursor: pointer;
+  transition: background-color ${transition.normal}, transform ${transition.fast}, box-shadow ${transition.fast};
+  box-shadow: ${boxShadow.small};
+  outline: none; // Removi a borda ao clicar
+
+  &:hover {
+    background-color: ${(props) =>
+        props.variant === "danger" ? "#c82333" : "#0056b3"};
+    box-shadow: ${boxShadow.medium};
+  }
+
+  &:active {
+    transform: translateY(1px);
+    box-shadow: ${boxShadow.small};
+  }
 `;
 
-// Texto do Botão
-export const ButtonText = styled.Text`
-  color: ${white};
-  font-size: ${fontSizeMd}px;
-  font-weight: bold;
-  text-transform: uppercase; /* Opcional: transforma o texto em maiúsculas */
+// Texto Estilizado
+export const StyledText = styled.p`
+  font-size: ${fontSize.medium};
+  color: ${colors.dark};
+  margin: ${spacing.small} 0;
 `;
 
-// Texto Genérico
-export const Texto = styled.Text`
-  font-size: ${fontSizeMd}px;
-  color: ${gray800};
-  /* Estilos adicionais (ex: alinhamento, margem) */
-`;
-
-// Container para Mensagens de Erro (ex: validação de formulário)
-export const ErrorMessage = styled.Text`
-  color: ${danger};
-  font-size: ${fontSizeSm}px;
-  margin-top: -${spacingSm}px; /* Ajuste fino para alinhar com o campo */
-  margin-bottom: ${spacingSm}px;
+// Container de Visualização
+export const StyledView = styled.div`
+  margin-bottom: ${spacing.small};
 `;
