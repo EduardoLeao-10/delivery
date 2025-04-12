@@ -1,5 +1,4 @@
 // src/app/Home/index.tsx
-// src/app/Home/index.tsx
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "expo-router";
 import {
@@ -21,10 +20,11 @@ import {
 	TotalText,
 } from "./styles";
 import { database } from "../../services/firebaseConfig";
-// --- CORREÇÃO: Importar 'update' ---
+// --- Importações do Firebase Database ---
 import { ref, set, push, get, remove, update } from "firebase/database";
-import { Product } from "../types";
-import { TextInput as ReactNativeTextInput } from 'react-native'; // Mantém o TextInput do RN
+import { Product } from "../types"; // Ajuste o caminho se necessário
+// Mantém o TextInput do RN se precisar em outro lugar, mas não parece usado aqui.
+// import { TextInput as ReactNativeTextInput } from 'react-native';
 
 // --- Interface para itens do pedido ---
 interface OrderItem {
@@ -34,7 +34,9 @@ interface OrderItem {
 	unitPrice: number;
 	total: number;
 	category: string;
-	// Estes campos no item são redundantes se já existem no pedido principal
+	// Estes campos são incluídos ao adicionar/atualizar o item, mas podem ser redundantes
+	// se o principal objetivo é salvar no nível do pedido em goToOrderView.
+	// Considere se realmente precisa deles DENTRO de cada item no Firebase.
 	customerName: string;
 	customerAddress: string;
 	customerPhone: string;
@@ -42,7 +44,7 @@ interface OrderItem {
 
 // --- Funções Utilitárias ---
 const capitalizeFirstLetter = (str: string): string => {
-	if (!str) return ""; // Garante que não falhe com string vazia
+	if (!str) return "";
 	return str
 		.toLowerCase()
 		.split(' ')
@@ -53,20 +55,25 @@ const capitalizeFirstLetter = (str: string): string => {
 const formatPhoneNumber = (value: string): string => {
     if (!value) return "";
 	const cleanedValue = value.replace(/\D/g, '');
-	const match = cleanedValue.match(/^(\d{2})(\d{5})(\d{4})$/); // Prioriza 9 dígitos no celular
-	if (match) {
-		return `(${match[1]}) ${match[2]}-${match[3]}`;
+    // Prioriza (XX) XXXXX-XXXX
+	const matchLong = cleanedValue.match(/^(\d{2})(\d{5})(\d{4})$/);
+	if (matchLong) {
+		return `(${matchLong[1]}) ${matchLong[2]}-${matchLong[3]}`;
 	}
-    const matchShort = cleanedValue.match(/^(\d{2})(\d{4})(\d{4})$/); // Tenta 8 dígitos
+    // Tenta (XX) XXXX-XXXX
+    const matchShort = cleanedValue.match(/^(\d{2})(\d{4})(\d{4})$/);
     if (matchShort) {
         return `(${matchShort[1]}) ${matchShort[2]}-${matchShort[3]}`;
     }
-    // Retorna o valor parcialmente formatado ou limpo se não corresponder
-	return value;
+    // Retorna parcialmente formatado se não couber nos padrões
+    if (cleanedValue.length > 2) {
+        return `(${cleanedValue.slice(0, 2)}) ${cleanedValue.slice(2)}`;
+    }
+	return cleanedValue; // Retorna apenas dígitos se for muito curto
 };
 
 const formatCurrency = (value: number): string => {
-	if (isNaN(value)) return "0,00"; // Retorna '0,00' se valor for NaN
+	if (isNaN(value)) return "0,00";
 	return value.toLocaleString("pt-BR", {
 		style: "decimal",
 		minimumFractionDigits: 2,
@@ -74,13 +81,13 @@ const formatCurrency = (value: number): string => {
 	});
 };
 
-// Função para converter string formatada (ex: "120,21") para número (ex: 120.21)
+// Converte string formatada (ex: "1.234,56") para número (ex: 1234.56)
 const parseCurrency = (value: string): number => {
     if (!value) return 0;
-	// Remove todos os caracteres não numéricos, exceto a vírgula decimal
-	const cleanedValue = value.replace(/[^\d,]/g, '');
-    // Substitui a vírgula decimal por ponto para o parseFloat
-    const numericString = cleanedValue.replace(',', '.');
+	// Remove pontos de milhar e substitui vírgula decimal por ponto
+	const cleanedValue = value.replace(/\./g, '').replace(',', '.');
+    // Remove quaisquer outros caracteres não numéricos (exceto o ponto decimal agora)
+    const numericString = cleanedValue.replace(/[^\d.]/g, '');
 	const numericValue = parseFloat(numericString);
 	return isNaN(numericValue) ? 0 : numericValue;
 };
@@ -93,10 +100,10 @@ export default function Home() {
 	const [products, setProducts] = useState<Product[]>([]);
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 	const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-	const [selectedItem, setSelectedItem] = useState<string>("");
-	const [selectedUnitPrice, setSelectedUnitPrice] = useState<number>(0);
-	const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
-	const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+	const [selectedItem, setSelectedItem] = useState<string>(""); // Nome do item manual
+	const [selectedUnitPrice, setSelectedUnitPrice] = useState<number>(0); // Preço unitário manual
+	const [selectedQuantity, setSelectedQuantity] = useState<number>(1); // Quantidade manual
+	const [currentOrderId, setCurrentOrderId] = useState<string | null>(null); // ID do pedido ativo
 
 	// Estados do Cliente
 	const [customerName, setCustomerName] = useState<string>("");
@@ -105,95 +112,108 @@ export default function Home() {
 
 	// Estados do Pagamento
 	const [paymentMethod, setPaymentMethod] = useState<string>("Dinheiro");
-	const [paymentValue, setPaymentValue] = useState<string>(''); // Mantido como string para formatação de input
+	const [paymentValue, setPaymentValue] = useState<string>(''); // Valor pago (string para input formatado)
 
 	// Produtos fixos (Exemplo)
 	const [fixedProducts] = useState<Product[]>([
-        { id: "1", name: "Curriculo", category: "Trabalho", price: 15.0 },
-        { id: "2", name: "Curriculo PDF", category: "Trabalho", price: 5.0 },
-        { id: "3", name: "Xerox", category: "Impressão", price: 1.0 },
-        { id: "4", name: "Imp Curriculo 1f", category: "Impressão", price: 3.0 },
-        { id: "5", name: "Imp Curriculo 2f", category: "Impressão", price: 4.0 },
-        { id: "6", name: "Musica Selecionar", category: "Musica", price: 2.0 },
-        { id: "7", name: "Detran", category: "Veiculo", price: 10.0 },
+        { id: "fixo_1", name: "Curriculo", category: "Trabalho", price: 15.0 },
+        { id: "fixo_2", name: "Curriculo PDF", category: "Trabalho", price: 5.0 },
+        { id: "fixo_3", name: "Xerox", category: "Impressão", price: 1.0 },
+        { id: "fixo_4", name: "Imp Curriculo 1f", category: "Impressão", price: 3.0 },
+        { id: "fixo_5", name: "Imp Curriculo 2f", category: "Impressão", price: 4.0 },
+        { id: "fixo_6", name: "Musica Selecionar", category: "Musica", price: 2.0 },
+        { id: "fixo_7", name: "Detran", category: "Veiculo", price: 10.0 },
 	]);
 
 	const router = useRouter();
 
-    // Calcula Total do item manual (Não precisa de estado separado)
+    // Calcula Total do item manual dinamicamente
 	const manualItemTotal = selectedQuantity * selectedUnitPrice;
 
 	// --- Effects ---
 
-	// Busca produtos do Firebase (apenas uma vez na montagem)
+	// Busca produtos do Firebase na montagem inicial
 	useEffect(() => {
 		const fetchData = async () => {
+            console.log("Buscando produtos do Firebase...");
 			try {
 				const dbRef = ref(database, "menu");
 				const snapshot = await get(dbRef);
 				let fetchedProducts: Product[] = [];
 				if (snapshot.exists()) {
 					const data: Record<string, Product> = snapshot.val();
+					// Mapeia os dados para incluir o ID do Firebase
 					fetchedProducts = Object.entries(data).map(([id, item]) => ({
 						...item,
-						id,
+						id, // Usa a chave do Firebase como ID
+                        // Garante que 'price' seja número
+                        price: Number(item.price) || 0,
+                        // Garante que outros campos existam (opcional)
+                        name: item.name || "Produto sem nome",
+                        category: item.category || "Sem categoria",
 					}));
 					setProducts(fetchedProducts);
-					console.log("Produtos carregados do Firebase.");
+					console.log(`${fetchedProducts.length} produtos carregados do Firebase.`);
 				} else {
-					console.log("Nenhum produto encontrado no nó 'menu' do Firebase. Usando apenas fixos.");
-                    setProducts([]); // Limpa produtos do Firebase se não encontrar
+					console.log("Nenhum produto encontrado no nó 'menu' do Firebase.");
+                    setProducts([]); // Define como vazio se não encontrar
 				}
-                // Combina categorias dos produtos fixos e do Firebase
+
+                // Combina produtos fixos e do Firebase para extrair categorias
                 const combinedProducts = [...fixedProducts, ...fetchedProducts];
 				const uniqueCategories = [...new Set(combinedProducts.map((item) => item.category))];
                 setCategories(uniqueCategories);
+                console.log("Categorias definidas:", uniqueCategories);
 
 			} catch (error) {
 				console.error("Erro ao buscar produtos do Firebase:", error);
+                alert("Erro ao buscar produtos do Firebase. Usando apenas os fixos.");
                 // Em caso de erro, usa apenas categorias dos produtos fixos
                 const fixedCategories = [...new Set(fixedProducts.map((item) => item.category))];
                 setCategories(fixedCategories);
+                setProducts([]); // Limpa produtos do Firebase em caso de erro
 			}
 		};
 		fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []); // Dependência vazia garante que rode só uma vez
+	}, []); // Dependência vazia [] garante que rode só uma vez na montagem
 
-    // Busca dados de um pedido existente se um ID for definido
-    // (Útil se você implementar a seleção de pedidos anteriores para edição)
+    // Busca/Limpa dados de um pedido quando currentOrderId muda
 	useEffect(() => {
 		const fetchOrderData = async () => {
 			if (!currentOrderId) {
-                // Limpa o estado se não houver pedido ativo (ou ao criar novo)
-                clearOrderState();
+                console.log("Nenhum pedido ativo (currentOrderId nulo), limpando estado local.");
+                clearOrderState(); // Limpa tudo se não há ID ativo
                 return;
             }
 
+            console.log("Tentando carregar dados do pedido existente:", currentOrderId);
 			const orderRef = ref(database, `pedidos/${currentOrderId}`);
 			try {
                 const snapshot = await get(orderRef);
                 if (snapshot.exists()) {
                     const orderData = snapshot.val();
-                    console.log("Carregando dados do pedido:", currentOrderId, orderData);
+                    console.log("Dados carregados do pedido:", currentOrderId, orderData);
                     // Preenche os campos com os dados do pedido existente
                     setCustomerName(orderData.customerName || "");
                     setCustomerAddress(orderData.customerAddress || "");
-                    // Formata o telefone ao carregar do DB (onde está salvo sem formatação)
                     setCustomerPhone(orderData.customerPhone ? formatPhoneNumber(orderData.customerPhone) : "");
                     setPaymentMethod(orderData.paymentMethod || "Dinheiro");
-                    // Formata o valor pago ao carregar
                     setPaymentValue(orderData.paymentValue ? formatCurrency(orderData.paymentValue) : '');
-                    // Carrega os itens do pedido
+                    // Carrega os itens do pedido (se existirem)
                     setOrderItems(orderData.itens ? Object.values(orderData.itens) as OrderItem[] : []);
                 } else {
-                    console.warn("Pedido com ID", currentOrderId, "não encontrado no Firebase.");
-                    // Talvez limpar o ID se não for encontrado?
-                    // setCurrentOrderId(null);
+                    // Se o ID existe mas o pedido não foi encontrado no DB (raro, mas possível)
+                    console.warn("Pedido com ID", currentOrderId, "não encontrado no Firebase, apesar do ID estar setado. Limpando estado.");
+                    alert(`Pedido ${currentOrderId} não encontrado no banco de dados.`);
+                    clearOrderState(); // Limpa o estado local
+                    setCurrentOrderId(null); // Limpa o ID inválido
                 }
             } catch (error) {
-                console.error("Erro ao buscar dados do pedido:", error);
-                alert("Erro ao carregar dados do pedido anterior.");
+                console.error(`Erro ao buscar dados do pedido ${currentOrderId}:`, error);
+                alert("Erro ao carregar dados do pedido anterior. Verifique sua conexão.");
+                clearOrderState();
+                setCurrentOrderId(null);
             }
 		};
 
@@ -214,145 +234,183 @@ export default function Home() {
         setSelectedUnitPrice(0);
         setSelectedQuantity(1);
         setSelectedCategory(null);
-        console.log("Estado do pedido local limpo.");
+        // Não limpa currentOrderId aqui, pois pode ser chamado ao iniciar um novo pedido
+        console.log("Estado local do formulário/pedido limpo.");
     }
 
 	// --- Funções de Interação com Firebase ---
 
-	const createNewOrder = async () => {
-        // Não valida mais os dados do cliente aqui, pois serão salvos depois
-		const pedidosRef = ref(database, "pedidos");
-		const newOrderRef = push(pedidosRef); // Gera um novo ID único
-		const newOrderId = newOrderRef.key;
+    // FUNÇÃO CORRIGIDA:
+    const createNewOrder = async (): Promise<string | null> => { // Adiciona tipo de retorno
+        console.log("Tentando criar novo pedido...");
+        const pedidosRef = ref(database, "pedidos");
+        // 1. Gera a referência e a chave ANTES de tentar usar
+        const newOrderRef = push(pedidosRef);
+        const newOrderId = newOrderRef.key;
 
-		if (newOrderId) {
-            // 1. Limpa o estado local completamente ANTES de definir o novo ID
+        // 2. Verifica se a chave foi gerada com sucesso
+        if (newOrderId) {
+            console.log("Novo ID de pedido gerado:", newOrderId);
+            // 3. Limpa o estado local do formulário ANTES de salvar no Firebase e definir o ID no estado
             clearOrderState();
-            // 2. Define o novo ID, o que disparará o useEffect para buscar dados (que não existirão ainda)
-			setCurrentOrderId(newOrderId);
+            // 4. Define o ID do pedido atual no estado (isso disparará o useEffect para buscar, mas estará vazio)
+            setCurrentOrderId(newOrderId);
 
-            // Pega os valores do estado atual (que acabaram de ser limpos)
-            // Ou você pode definir valores padrão explícitos aqui
+            // 5. Define a estrutura de dados inicial que será salva
             const initialOrderData = {
-                customerName: "", // Inicia vazio
-                customerAddress: "", // Inicia vazio
-                customerPhone: "", // Inicia vazio (será salvo sem formatação depois)
-                paymentMethod: "Dinheiro", // Valor padrão
-                paymentValue: 0, // Valor padrão numérico
-                itens: {}, // Objeto vazio para itens
-                createdAt: new Date().toISOString(), // Opcional: timestamp
-                status: "aberto", // Opcional: status
+                customerName: "",
+                customerAddress: "",
+                customerPhone: "", // Salvo sem formatação inicialmente
+                paymentMethod: "Dinheiro",
+                paymentValue: 0,
+                itens: {}, // Começa sem itens
+                createdAt: new Date().toISOString(), // Timestamp de criação
+                status: "aberto", // Status inicial ('aberto' ou 'pendente')
+                totalOrderValue: 0, // Total inicial
+                lastUpdatedAt: new Date().toISOString(), // Timestamp inicial de atualização
             };
 
-			try {
-                // Salva a estrutura inicial do pedido no Firebase
-                await set(newOrderRef, initialOrderData);
-                alert("Novo pedido iniciado! ID: " + newOrderId);
+            // 6. Tenta salvar os dados iniciais no Firebase DENTRO do 'if'
+            try {
+                await set(newOrderRef, initialOrderData); // Usa a referência gerada
                 console.log("Novo pedido criado no Firebase com dados iniciais:", newOrderId, initialOrderData);
-                return newOrderId; // Retorna o ID para uso imediato se necessário
+                alert("Novo pedido iniciado! ID: " + newOrderId);
+                return newOrderId; // Retorna o ID em caso de sucesso
+
             } catch (error) {
                 console.error("Erro ao criar novo pedido no Firebase:", error);
-                alert("Erro ao criar novo pedido. Tente novamente.");
-                setCurrentOrderId(null); // Reseta o ID se a criação falhar
-                return null;
+                alert("Erro ao criar novo pedido no Firebase. Tente novamente.");
+                // Se falhar ao salvar, reverte o ID no estado para evitar inconsistência
+                setCurrentOrderId(null);
+                return null; // Retorna null em caso de falha
             }
 
-		} else {
-			console.error("Falha ao obter key para novo pedido.");
-            alert("Erro crítico ao gerar ID para o pedido.");
-			return null;
-		}
-	};
+        } else {
+            // 7. Lida com o caso raro de falha na geração da chave
+            console.error("Falha ao obter key (ID) para novo pedido do Firebase.");
+            alert("Erro crítico: Não foi possível gerar um ID para o novo pedido.");
+            return null; // Retorna null se a chave não pôde ser gerada
+        }
+    }; // --- FIM DA FUNÇÃO createNewOrder CORRIGIDA ---
+
 
 	const addToOrder = async (product: Product) => {
+        console.log(`Adicionando produto: ${product.name} (ID: ${product.id})`);
 		let orderId = currentOrderId;
 
-		// Se não há pedido ativo, cria um implicitamente
+		// Se não há pedido ativo, tenta criar um novo
 		if (!orderId) {
-            alert("Nenhum pedido ativo. Criando um novo pedido para adicionar o item.");
-			orderId = await createNewOrder();
-			if (!orderId) {
-				// createNewOrder já mostra alerta de erro
+            console.log("Nenhum pedido ativo. Tentando criar um novo...");
+			const newId = await createNewOrder(); // Chama a função corrigida
+			if (!newId) {
+				console.error("Falha ao criar novo pedido em addToOrder. Abortando.");
+                // createNewOrder já mostra alerta de erro interno
 				return; // Sai se não conseguiu criar o pedido
 			}
-            // createNewOrder define currentOrderId, então podemos continuar
+            orderId = newId; // Usa o novo ID retornado
+            // O estado currentOrderId já foi setado dentro de createNewOrder
+            console.log("Novo pedido criado implicitamente:", orderId);
 		}
 
-        // Usa o ID (garantido que existe neste ponto)
+        // Garante que temos um ID válido neste ponto
+        if (!orderId) {
+             console.error("ID do pedido ainda é nulo após tentativa de criação. Abortando addToOrder.");
+             alert("Erro inesperado ao obter ID do pedido.");
+             return;
+        }
+
 		const itemRef = ref(database, `pedidos/${orderId}/itens/${product.id}`);
 
 		try {
-            // Busca o item existente para atualizar a quantidade corretamente
+            // Busca o item existente para incrementar a quantidade
+            console.log(`Verificando item existente em pedidos/${orderId}/itens/${product.id}`);
             const existingItemSnapshot = await get(itemRef);
             let currentQuantity = 0;
             if (existingItemSnapshot.exists()) {
                 currentQuantity = existingItemSnapshot.val().quantity || 0;
+                console.log(`Item ${product.id} encontrado com quantidade ${currentQuantity}.`);
+            } else {
+                console.log(`Item ${product.id} não encontrado. Será adicionado.`);
             }
 
-            const newQuantity = currentQuantity + 1; // Adiciona 1 à quantidade existente
-            const newTotal = newQuantity * product.price;
+            const newQuantity = currentQuantity + 1;
+            const newTotal = newQuantity * (Number(product.price) || 0); // Garante que price é número
 
-            // Cria o objeto do item com os dados atualizados e os dados do cliente *atuais* do estado
+            // Prepara os dados do item para salvar no Firebase
 			const newOrderItemData: OrderItem = {
 				id: product.id,
 				name: product.name,
 				quantity: newQuantity,
-				unitPrice: product.price,
+				unitPrice: Number(product.price) || 0,
 				total: newTotal,
 				category: product.category,
-				// Inclui dados do cliente do estado atual (serão sobrescritos na finalização)
+				// Pega dados do cliente do estado ATUAL ao adicionar/atualizar item
+                // Estes serão sobrescritos pelos valores finais em goToOrderView
                 customerName: customerName,
                 customerAddress: customerAddress,
                 customerPhone: customerPhone.replace(/\D/g, ''), // Salva sem formatação
 			};
 
-            // Usa 'set' para adicionar ou sobrescrever o item específico no nó 'itens'
+            // Usa 'set' para adicionar ou sobrescrever o item específico
+            console.log(`Salvando item ${product.id} com quantidade ${newQuantity} no Firebase...`);
 			await set(itemRef, newOrderItemData);
+            console.log("Item salvo no Firebase.");
 
 			// Atualiza o estado local para refletir a mudança na UI
 			setOrderItems((prevItems) => {
 				const itemIndex = prevItems.findIndex((item) => item.id === product.id);
 				if (itemIndex > -1) {
-					// Atualiza item existente na lista do estado
+					// Atualiza item existente
 					const updatedItems = [...prevItems];
-					updatedItems[itemIndex] = newOrderItemData; // Usa os dados que foram salvos
+					updatedItems[itemIndex] = newOrderItemData;
 					return updatedItems;
 				} else {
-					// Adiciona novo item à lista do estado
+					// Adiciona novo item
 					return [...prevItems, newOrderItemData];
 				}
 			});
-
-			console.log(`Item '${product.name}' adicionado/atualizado para quantidade ${newQuantity}.`);
+            console.log(`Estado local atualizado. Item '${product.name}' com quantidade ${newQuantity}.`);
 
 		} catch (error) {
-			console.error("Erro ao adicionar/atualizar item no pedido:", error);
+			console.error(`Erro ao adicionar/atualizar item ${product.id} no pedido ${orderId}:`, error);
 			alert(`Erro ao adicionar ${product.name}. Tente novamente.`);
 		}
 	};
 
 	const addManualEntry = async () => {
-		if (!selectedItem || selectedUnitPrice <= 0 || selectedQuantity <= 0) {
-			alert("Preencha: Nome do item, Quantidade (>0) e Preço Unitário (>0).");
+		if (!selectedItem.trim() || selectedUnitPrice <= 0 || selectedQuantity <= 0) {
+			alert("Para adicionar item manual, preencha:\n- Nome do item (não vazio)\n- Quantidade (maior que 0)\n- Preço Unitário (maior que 0).");
 			return;
 		}
 
 		let orderId = currentOrderId;
 		if (!orderId) {
-            alert("Nenhum pedido ativo. Criando um novo pedido para adicionar o item manual.");
-			orderId = await createNewOrder();
-			if (!orderId) return;
+            console.log("Nenhum pedido ativo para item manual. Tentando criar um novo...");
+			const newId = await createNewOrder();
+			if (!newId) {
+                console.error("Falha ao criar novo pedido em addManualEntry. Abortando.");
+                return;
+            }
+            orderId = newId;
+            console.log("Novo pedido criado implicitamente para item manual:", orderId);
 		}
+
+        // Garante que temos um ID válido
+        if (!orderId) {
+             console.error("ID do pedido ainda é nulo após tentativa de criação. Abortando addManualEntry.");
+             alert("Erro inesperado ao obter ID do pedido.");
+             return;
+        }
 
 		const newItemId = `manual_${Date.now()}`; // ID único baseado no timestamp
 		const newOrderItem: OrderItem = {
 			id: newItemId,
-			name: selectedItem, // Nome do estado
+			name: capitalizeFirstLetter(selectedItem.trim()), // Usa o nome capitalizado e sem espaços extras
 			quantity: selectedQuantity,
 			unitPrice: selectedUnitPrice,
-			total: selectedQuantity * selectedUnitPrice, // Usa o total calculado
+			total: selectedQuantity * selectedUnitPrice,
 			category: "Manual",
-            // Dados do cliente do estado atual
+            // Pega dados do cliente do estado atual
             customerName: customerName,
             customerAddress: customerAddress,
             customerPhone: customerPhone.replace(/\D/g, ''),
@@ -361,44 +419,48 @@ export default function Home() {
 		const itemRef = ref(database, `pedidos/${orderId}/itens/${newItemId}`);
 
 		try {
+            console.log(`Adicionando item manual ${newItemId} ao pedido ${orderId}...`);
             await set(itemRef, newOrderItem); // Salva no Firebase
 			setOrderItems((prevItems) => [...prevItems, newOrderItem]); // Adiciona ao estado local
+            console.log("Item manual adicionado com sucesso:", newOrderItem.name);
 
-            // Limpa os campos de entrada manual após adicionar
+            // Limpa os campos de entrada manual
             setSelectedItem("");
             setSelectedUnitPrice(0);
             setSelectedQuantity(1);
-            console.log("Item manual adicionado:", newOrderItem.name);
+
         } catch (error) {
             console.error("Erro detalhado ao salvar item manual no Firebase:", error);
-            alert("Erro ao salvar o item manual. Tente novamente.");
+            alert("Erro ao salvar o item manual. Verifique o console e tente novamente.");
         }
 	};
 
-    // Função para atualizar quantidade diretamente na tabela
+    // Atualiza quantidade de um item existente na tabela
 	const updateQuantity = async (id: string, newQuantity: number) => {
 		if (!currentOrderId) {
+			console.warn("Tentativa de atualizar quantidade sem pedido ativo.");
 			alert("Nenhum pedido ativo para atualizar quantidade.");
 			return;
 		}
-        if (isNaN(newQuantity) || newQuantity < 0) {
-            console.warn("Quantidade inválida fornecida:", newQuantity);
-            newQuantity = 0; // Define como 0 se inválido
-        }
+        // Valida a quantidade (não pode ser negativa)
+        const validQuantity = Math.max(0, isNaN(newQuantity) ? 0 : newQuantity);
+        console.log(`Atualizando quantidade do item ${id} para ${validQuantity}`);
+
 
 		const itemIndex = orderItems.findIndex(item => item.id === id);
         if (itemIndex === -1) {
-            console.error("Item não encontrado no estado local para atualizar quantidade:", id);
+            console.error(`Item ${id} não encontrado no estado local para atualizar quantidade.`);
             return;
         }
 
-        const itemToUpdate = { ...orderItems[itemIndex] }; // Cria cópia do item
-        itemToUpdate.quantity = newQuantity;
-        itemToUpdate.total = newQuantity * itemToUpdate.unitPrice;
+        const itemToUpdate = { ...orderItems[itemIndex] }; // Cria cópia
+        itemToUpdate.quantity = validQuantity;
+        itemToUpdate.total = validQuantity * itemToUpdate.unitPrice; // Recalcula total
 
         const itemRef = ref(database, `pedidos/${currentOrderId}/itens/${id}`);
 		try {
             // Usa 'update' para modificar apenas quantidade e total no Firebase
+            console.log(`Enviando atualização para Firebase: { quantity: ${validQuantity}, total: ${itemToUpdate.total} }`);
             await update(itemRef, { quantity: itemToUpdate.quantity, total: itemToUpdate.total });
 
             // Atualiza o estado local
@@ -407,100 +469,112 @@ export default function Home() {
                     item.id === id ? itemToUpdate : item
                 )
             );
-            console.log(`Quantidade do item ${id} atualizada para ${newQuantity}`);
+            console.log(`Quantidade do item ${id} atualizada com sucesso.`);
         } catch (error) {
-            console.error("Erro ao atualizar a quantidade do item:", error);
+            console.error(`Erro ao atualizar a quantidade do item ${id}:`, error);
             alert("Erro ao atualizar a quantidade. Tente novamente.");
-            // Opcional: Reverter a mudança no estado local se o Firebase falhar?
+            // Considerar reverter a mudança no estado local se o Firebase falhar?
         }
 	};
 
-    // Função para atualizar o nome diretamente na tabela
+    // Atualiza nome de um item existente na tabela
     const updateItemName = async (id: string, newName: string) => {
-         if (!currentOrderId) return;
+         if (!currentOrderId) {
+             console.warn("Tentativa de atualizar nome sem pedido ativo.");
+             return;
+         }
 
-        const capitalizedName = capitalizeFirstLetter(newName); // Capitaliza
+        const capitalizedName = capitalizeFirstLetter(newName.trim());
+        if (!capitalizedName) {
+            alert("O nome do item não pode ficar vazio.");
+            // Talvez recarregar o nome antigo?
+            return;
+        }
+        console.log(`Atualizando nome do item ${id} para "${capitalizedName}"`);
 
         const itemIndex = orderItems.findIndex(item => item.id === id);
-        if (itemIndex === -1) return;
+        if (itemIndex === -1) {
+            console.error(`Item ${id} não encontrado no estado local para atualizar nome.`);
+            return;
+        }
 
         const itemToUpdate = { ...orderItems[itemIndex], name: capitalizedName };
 
         const itemRef = ref(database, `pedidos/${currentOrderId}/itens/${id}`);
         try {
+            console.log(`Enviando atualização para Firebase: { name: "${capitalizedName}" }`);
             await update(itemRef, { name: capitalizedName }); // Atualiza só o nome no FB
 
             setOrderItems(prevItems => prevItems.map(item => item.id === id ? itemToUpdate : item));
-            console.log(`Nome do item ${id} atualizado para ${capitalizedName}`);
+            console.log(`Nome do item ${id} atualizado com sucesso.`);
         } catch (error) {
-             console.error("Erro ao atualizar o nome do item:", error);
+             console.error(`Erro ao atualizar o nome do item ${id}:`, error);
             alert("Erro ao atualizar o nome do item. Tente novamente.");
         }
     };
 
-     // Função para atualizar o preço unitário diretamente na tabela (COM console.log adicionado)
+     // Atualiza preço unitário de um item existente na tabela
     const updateItemUnitPrice = async (id: string, valueString: string) => {
-        if (!currentOrderId) return;
-
-        // PASSO 1: Parsear a string do input para número
-        const newUnitPrice = parseCurrency(valueString);
-
-        // <<< DEBUG: Verifica o valor de entrada e o resultado do parse >>>
-        console.log(`updateItemUnitPrice - Input: "${valueString}", Parsed Price: ${newUnitPrice}`);
-
-        // Validação simples do preço parseado (não pode ser negativo)
-        // A função parseCurrency já retorna 0 se for NaN, então só precisamos checar < 0
-        if (newUnitPrice < 0) {
-             console.warn("Preço unitário inválido ou negativo:", valueString, "->", newUnitPrice);
-             // Decide o que fazer: resetar? alertar? ignorar? Por enquanto, vamos ignorar.
+        if (!currentOrderId) {
+             console.warn("Tentativa de atualizar preço unitário sem pedido ativo.");
              return;
         }
 
-        // Encontra o item no estado local
+        const newUnitPrice = parseCurrency(valueString);
+        console.log(`Atualizando preço unitário do item ${id}. Input: "${valueString}", Parsed: ${newUnitPrice}`);
+
+        // Valida preço (não pode ser negativo)
+        if (newUnitPrice < 0) {
+             console.warn("Preço unitário inválido (negativo):", newUnitPrice);
+             // Pode alertar o usuário ou simplesmente ignorar/resetar
+             return;
+        }
+
         const itemIndex = orderItems.findIndex(item => item.id === id);
         if (itemIndex === -1) {
-            console.error("Item não encontrado no estado local para atualizar preço:", id);
+            console.error(`Item ${id} não encontrado no estado local para atualizar preço.`);
             return;
         }
 
-        // Cria uma cópia do item e atualiza preço unitário e total
         const itemToUpdate = { ...orderItems[itemIndex] };
         itemToUpdate.unitPrice = newUnitPrice; // Salva o número parseado
         itemToUpdate.total = itemToUpdate.quantity * newUnitPrice; // Recalcula o total
 
-        // Referência do item no Firebase
         const itemRef = ref(database, `pedidos/${currentOrderId}/itens/${id}`);
         try {
-            // PASSO 2: Atualizar no Firebase com os novos valores numéricos
+            console.log(`Enviando atualização para Firebase: { unitPrice: ${newUnitPrice}, total: ${itemToUpdate.total} }`);
             await update(itemRef, { unitPrice: itemToUpdate.unitPrice, total: itemToUpdate.total });
 
-            // PASSO 3: Atualizar o estado local do React
              setOrderItems(prevItems => prevItems.map(item => item.id === id ? itemToUpdate : item));
-
-             // <<< DEBUG: Confirma que a atualização foi enviada e o estado mudou >>>
-             console.log(`Preço unitário do item ${id} atualizado para ${newUnitPrice} no estado e Firebase.`);
+             console.log(`Preço unitário do item ${id} atualizado com sucesso.`);
         } catch (error) {
-             console.error("Erro ao atualizar o preço unitário no Firebase:", error);
+             console.error(`Erro ao atualizar o preço unitário do item ${id}:`, error);
             alert("Erro ao salvar o novo preço unitário. Tente novamente.");
-            // Considerar reverter a mudança no estado local em caso de erro no Firebase?
         }
     };
 
 
 	const removeFromOrder = async (id: string) => {
 		if (!currentOrderId) {
+            console.warn("Tentativa de remover item sem pedido ativo.");
 			alert("Nenhum pedido ativo para remover itens.");
 			return;
 		}
 
 		const itemToRemove = orderItems.find(item => item.id === id);
-        if (!itemToRemove) return; // Item já não existe localmente
+        if (!itemToRemove) {
+             console.warn(`Tentativa de remover item ${id} que não está no estado local.`);
+             return; // Item já não existe localmente
+        }
 
-        const confirmation = window.confirm(`Tem certeza que deseja remover o item "${itemToRemove.name}"?`);
-        if (!confirmation) return;
+        // Confirmação com o usuário
+        const confirmation = window.confirm(`Tem certeza que deseja remover o item "${itemToRemove.name}" do pedido?`);
+        if (!confirmation) {
+            console.log("Remoção do item cancelada pelo usuário.");
+            return;
+        }
 
-
-		console.log(`Tentando remover item ${id} do pedido ${currentOrderId}`);
+		console.log(`Tentando remover item ${id} do pedido ${currentOrderId}...`);
 		const itemRef = ref(database, `pedidos/${currentOrderId}/itens/${id}`);
 
 		try {
@@ -510,36 +584,40 @@ export default function Home() {
             setOrderItems((prevItems) => prevItems.filter((item) => item.id !== id));
             console.log(`Item ${id} removido do estado local.`);
         } catch (error) {
-            console.error("Erro ao remover o item do Firebase:", error);
+            console.error(`Erro ao remover o item ${id} do Firebase:`, error);
             alert("Erro ao remover o item. Tente novamente.");
         }
 	};
 
 	const removeAllItems = async () => {
 		if (!currentOrderId) {
+             console.warn("Tentativa de limpar itens sem pedido ativo.");
 			alert("Nenhum pedido ativo para limpar os itens.");
 			return;
 		}
         if (orderItems.length === 0) {
-            alert("O pedido já está sem itens.");
+            alert("O pedido já está vazio.");
             return;
         }
 
-		const confirmation = window.confirm("Tem certeza que deseja remover TODOS os itens deste pedido? (Os dados do cliente serão mantidos)");
-        if (!confirmation) return;
+        // Confirmação com o usuário
+		const confirmation = window.confirm("Tem certeza que deseja remover TODOS os itens deste pedido?\n(Os dados do cliente e pagamento serão mantidos)");
+        if (!confirmation) {
+             console.log("Limpeza de itens cancelada pelo usuário.");
+             return;
+        }
 
 		try {
-			console.log(`Removendo todos os itens do pedido ${currentOrderId}`);
+			console.log(`Removendo todos os itens do pedido ${currentOrderId}...`);
 			const itemsRef = ref(database, `pedidos/${currentOrderId}/itens`);
 			// Define o nó 'itens' como null para remover todos os filhos de uma vez
             await set(itemsRef, null);
 
-			console.log(`Todos os itens removidos com sucesso do Firebase.`);
+			console.log(`Todos os itens removidos com sucesso do Firebase para o pedido ${currentOrderId}.`);
 			setOrderItems([]); // Limpa o estado local de itens
-			// Não limpa mais os inputs do cliente/pagamento aqui
 			alert("Todos os itens foram removidos com sucesso!");
 		} catch (error) {
-			console.error("Erro ao remover todos os itens do Firebase:", error);
+			console.error(`Erro ao remover todos os itens do pedido ${currentOrderId}:`, error);
 			alert("Erro ao remover os itens. Tente novamente.");
 		}
 	};
@@ -547,121 +625,126 @@ export default function Home() {
 
 	// --- Navegação ---
 
-	// --- CORREÇÃO PRINCIPAL: Atualiza dados ANTES de navegar ---
+	// Salva os dados finais do pedido e navega para a visualização
 	const goToOrderView = async () => {
-        // 1. Verifica se há um pedido ativo (ID existe)
+        console.log("Iniciando processo de finalização e navegação para OrderView...");
+        // 1. Verifica se há um pedido ativo
 		if (!currentOrderId) {
-			alert("Nenhum pedido ativo para finalizar. Por favor, crie um 'Novo Pedido'.");
+            console.warn("Tentativa de finalizar sem pedido ativo.");
+			alert("Não há um pedido ativo para finalizar.\nCrie um 'Novo Pedido' ou selecione um pedido existente.");
 			return;
 		}
 
-        // 2. Verifica se há itens no pedido (estado local)
+        // 2. Verifica se há itens no pedido
         if (orderItems.length === 0) {
-            alert("Não é possível finalizar um pedido vazio. Adicione itens primeiro.");
+            console.warn("Tentativa de finalizar pedido vazio.");
+            alert("Não é possível finalizar um pedido vazio.\nAdicione itens primeiro.");
             return;
         }
 
-        // 3. Validação dos dados do cliente (recomendado)
-        if (!customerName || !customerAddress || !customerPhone.replace(/\D/g, '')) { // Verifica telefone sem formatação
-             const proceed = window.confirm("Os dados do cliente (Nome, Endereço, Telefone) parecem incompletos. Deseja continuar mesmo assim?");
+        // 3. Validação (opcional, mas recomendada) dos dados do cliente
+        const phoneDigits = customerPhone.replace(/\D/g, '');
+        if (!customerName.trim() || !customerAddress.trim() || phoneDigits.length < 10) { // Verifica telefone com 10 ou 11 dígitos
+             const proceed = window.confirm("Os dados do cliente (Nome, Endereço, Telefone) parecem incompletos ou inválidos.\nDeseja continuar mesmo assim?");
             if (!proceed) {
+                console.log("Finalização cancelada pelo usuário devido a dados incompletos.");
                 return; // Para a execução se o usuário cancelar
             }
+             console.warn("Prosseguindo com dados do cliente incompletos.");
         }
 
-		// 4. Prepara os dados para atualização no Firebase
-        //    Pega os valores MAIS RECENTES do estado local
-        const phoneUnformatted = customerPhone.replace(/\D/g, ''); // Remove formatação para salvar
+		// 4. Prepara os dados finais para atualização no Firebase
         const parsedPaymentValue = parseCurrency(paymentValue); // Converte valor pago para número
-        const calculatedTotalPrice = orderItems.reduce((sum, item) => sum + (item.total || 0), 0); // Recalcula o total aqui para garantir
+        const calculatedTotalPrice = orderItems.reduce((sum, item) => sum + (item.total || 0), 0);
+
+        console.log("Preparando dados para salvar no Firebase:", {
+            customerName, customerAddress, phoneDigits, paymentMethod, parsedPaymentValue, calculatedTotalPrice
+        });
 
 		try {
 			// 5. Referência para o nó RAIZ do pedido atual
 			const orderRef = ref(database, `pedidos/${currentOrderId}`);
 
-			// 6. Objeto contendo APENAS os campos a serem atualizados no Firebase
+			// 6. Objeto com os campos a serem atualizados/confirmados no Firebase
 			const updates = {
-				customerName: customerName,             // Valor atual do estado
-				customerAddress: customerAddress,         // Valor atual do estado
-				customerPhone: phoneUnformatted,        // Telefone sem formatação
-				paymentMethod: paymentMethod,           // Método de pagamento atual
-				paymentValue: parsedPaymentValue,       // Valor pago numérico
-                totalOrderValue: calculatedTotalPrice,  // Salva o total calculado
-                lastUpdatedAt: new Date().toISOString() // Opcional: timestamp da última atualização
+				customerName: customerName.trim(),
+				customerAddress: customerAddress.trim(),
+				customerPhone: phoneDigits, // Salva apenas dígitos
+				paymentMethod: paymentMethod,
+				paymentValue: parsedPaymentValue,
+                totalOrderValue: calculatedTotalPrice, // Salva o total final calculado
+                lastUpdatedAt: new Date().toISOString(), // Atualiza timestamp da última modificação
+                // Poderia atualizar o status aqui também, se necessário. Ex: status: 'confirmado'
 			};
 
 			// 7. Executa a operação de ATUALIZAÇÃO no Firebase
+            console.log(`Atualizando dados do pedido ${currentOrderId} no Firebase...`);
 			await update(orderRef, updates);
-			console.log("Dados finais do pedido atualizados no Firebase com sucesso:", currentOrderId, updates);
+			console.log("Dados finais do pedido atualizados no Firebase com sucesso.");
 
-			// 8. Navega para a próxima tela APÓS a atualização bem-sucedida
+			// 8. Navega para a tela de visualização APÓS o sucesso da atualização
+            console.log("Navegando para /OrderView com os parâmetros...");
 			router.push({
-				pathname: "/OrderView", // Confirme se este é o caminho correto da sua rota
+				pathname: "/OrderView", // Confirme o caminho da rota
 				params: {
                     // Passa os dados necessários para a próxima tela
 					orderId: currentOrderId,
-					customerName: customerName,
-					customerAddress: customerAddress,
-					customerPhone: customerPhone, // Pode passar formatado para exibição
-					paymentMethod: paymentMethod,
-					paymentValue: String(parsedPaymentValue), // Passa como string
-                    totalOrderValue: String(calculatedTotalPrice), // Passa como string
-                    // Serializa os itens para passar como parâmetro (cuidado com limites de tamanho)
-					orderItems: JSON.stringify(orderItems),
+					// Não precisa passar todos os dados, OrderView buscará pelo ID.
+                    // Passar o ID é suficiente.
 				},
 			});
+            // Opcional: Limpar o estado local após navegar? Ou deixar OrderView buscar?
+            // clearOrderState(); // Cuidado: isso limparia antes de OrderView carregar
+            // setCurrentOrderId(null); // Isso desativaria o pedido atual
 
 		} catch (error) {
-            // 9. Trata erros que possam ocorrer durante a atualização no Firebase
-			console.error("Erro ao atualizar dados finais do pedido no Firebase:", error);
-			alert("Ocorreu um erro ao salvar as informações finais do pedido. Verifique sua conexão e tente novamente.");
+            // 9. Trata erros durante a atualização no Firebase
+			console.error(`Erro ao atualizar dados finais do pedido ${currentOrderId} no Firebase:`, error);
+			alert("Ocorreu um erro ao salvar as informações finais do pedido.\nVerifique sua conexão e tente novamente.");
 		}
 	};
 
 
 	const goToOrders = () => {
+        console.log("Navegando para /Orders");
 		router.push("/Orders"); // Ajuste o caminho se necessário
 	};
 	const goToQuiz = () => {
+         console.log("Navegando para /Quiz");
 		router.push("/Quiz"); // Ajuste o caminho se necessário
 	};
 
 	// --- Handlers de Input (Atualizam Estado Local) ---
 
-    // Handler genérico para inputs de quantidade (usado no item manual)
+    // Handler genérico para inputs de quantidade (item manual)
 	const handleQuantityChange = (
 		setter: React.Dispatch<React.SetStateAction<number>>,
 		value: string
 	) => {
 		const parsedValue = parseInt(value, 10);
-        // Permite campo vazio ou define 0 se inválido, não permite negativo
-		setter(value === '' ? 0 : (isNaN(parsedValue) || parsedValue < 0 ? 0 : parsedValue));
+        // Permite campo vazio (representa 0), não permite negativo
+		setter(isNaN(parsedValue) || parsedValue < 0 ? 0 : parsedValue);
 	};
 
-    // Handler para input de Valor Pago (formata enquanto digita)
+    // Handler para input de Valor Pago (formata como moeda BRL enquanto digita)
 	const handlePaymentValueChange = (text: string) => {
-        if (text === '') {
-            setPaymentValue('');
+        // Remove tudo que não for dígito
+		let cleanedValue = text.replace(/\D/g, '');
+        if (cleanedValue === '') {
+            setPaymentValue(''); // Permite limpar o campo
             return;
         }
-		// Remove tudo que não for dígito
-		let cleanedValue = text.replace(/\D/g, '');
-        if (cleanedValue.length === 0) {
-             setPaymentValue('');
-             return;
-        }
-
-        // Converte para número (centavos) e depois para formato moeda BRL
+        // Converte para número (centavos)
         const numberValue = parseInt(cleanedValue, 10);
+        // Formata como moeda BRL (sem o R$)
         const formattedValue = (numberValue / 100).toLocaleString('pt-BR', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
-
-		setPaymentValue(formattedValue);
+		setPaymentValue(formattedValue); // Atualiza estado com valor formatado (string)
 	};
 
-    // Handlers para dados do cliente (com useCallback para otimização leve)
+    // Handlers para dados do cliente com useCallback para otimização leve
     const handleCustomerNameChange = useCallback((text: string) => {
         setCustomerName(capitalizeFirstLetter(text));
     }, []);
@@ -671,30 +754,38 @@ export default function Home() {
     }, []);
 
     const handleCustomerPhoneChange = useCallback((text: string) => {
-        // Só formata quando tem dígitos suficientes, permite apagar
-        setCustomerPhone(formatPhoneNumber(text));
+        setCustomerPhone(formatPhoneNumber(text)); // Formata enquanto digita
     }, []);
 
     // Handler para nome do item manual
     const handleSelectedItemChange = useCallback((text: string) => {
-        setSelectedItem(capitalizeFirstLetter(text));
+        setSelectedItem(text); // Capitaliza ao adicionar, não ao digitar
     }, []);
-     // Handler para o Preço Unitário do item manual (usa parseCurrency diretamente)
+
+     // Handler para o Preço Unitário do item manual
     const handleSelectedUnitPriceChange = useCallback((text: string) => {
-        setSelectedUnitPrice(parseCurrency(text));
+        // Remove caracteres não numéricos, exceto vírgula
+        const cleaned = text.replace(/[^\d,]/g, '');
+        // Permite apenas uma vírgula
+        const parts = cleaned.split(',');
+        let valueToParse = cleaned;
+        if (parts.length > 2) {
+            valueToParse = parts[0] + ',' + parts.slice(1).join('');
+        }
+        // Atualiza o estado com o valor parseado (número)
+        setSelectedUnitPrice(parseCurrency(valueToParse));
+        // Não formata o input aqui, formata apenas na exibição se necessário
+        // ou usa um estado separado para o input se a formatação for complexa
     }, []);
 
 
 	// --- Cálculos Derivados do Estado ---
 	const totalPrice = orderItems.reduce((sum, item) => sum + (item.total || 0), 0);
 
-	// Calcula o Troco/Falta
+	// Calcula Troco ou Valor Faltante
 	const calculateChange = () => {
-        const parsedPayment = parseCurrency(paymentValue);
-		// Se não houver valor pago válido, retorna o negativo do total (ou seja, falta tudo)
-        if (isNaN(parsedPayment) || parsedPayment <= 0) {
-			return -totalPrice;
-		}
+        const parsedPayment = parseCurrency(paymentValue); // Usa o parseCurrency correto
+        // Retorna a diferença (positiva para troco, negativa para falta)
 		return parsedPayment - totalPrice;
 	};
 	const changeAmount = calculateChange();
@@ -704,42 +795,47 @@ export default function Home() {
 	return (
 		<Container>
 			<Title>Lançamento do Pedido</Title>
-            {/* Mostra o ID do pedido sendo editado, se houver */}
+            {/* Mostra o ID do pedido ativo, se houver */}
             {currentOrderId && (
                  <p style={{ fontSize: '14px', color: '#666', fontStyle: 'italic', marginBottom: '15px', textAlign: 'center' }}>
-                     Editando Pedido ID: {currentOrderId}
+                     Editando Pedido ID: <strong style={{color: '#333'}}>{currentOrderId}</strong>
                  </p>
             )}
 
             {/* Botões de Ação Principais */}
 			<div style={{ marginBottom: '20px', display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
                 {/* Botão Novo Pedido */}
-                <NextButton onClick={createNewOrder} style={{ backgroundColor: '#4CAF50' }}>
+                <NextButton onClick={createNewOrder} style={{ backgroundColor: '#4CAF50', minWidth: '150px' }}>
                     <NextButtonText>Novo Pedido</NextButtonText>
                 </NextButton>
                 {/* Botão Pedidos Anteriores */}
-                <NextButton onClick={goToOrders}>
+                <NextButton onClick={goToOrders} style={{ backgroundColor: '#007BFF', minWidth: '150px' }}>
                     <NextButtonText>Pedidos Anteriores</NextButtonText>
                 </NextButton>
                  {/* Botão Questionário */}
-                <NextButton onClick={goToQuiz}>
+                <NextButton onClick={goToQuiz} style={{ backgroundColor: '#9C27B0', minWidth: '150px' }}>
                     <NextButtonText>Fazer Questionário</NextButtonText>
                 </NextButton>
             </div>
 
 
-			{/* Seleção de Categorias (se houver categorias) */}
+			{/* Seleção de Categorias */}
             {categories.length > 0 && (
                 <div style={{ marginBottom: '20px' }}>
                     <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>Categorias</h2>
                     <CategoryContainer>
-                        {/* Botão Todas as Categorias */}
+                        {/* Botão Todas */}
                         <CategoryButton
                             selected={selectedCategory === null}
                             onClick={() => setSelectedCategory(null)}
-                            style={{backgroundColor: selectedCategory === null ? '#E91E63' : '#f5f5f5', color: selectedCategory === null ? '#fff' : '#333'}}
+                            // Aplica estilo diretamente para sobrescrever se necessário
+                            style={{
+                                backgroundColor: selectedCategory === null ? '#E91E63' : '#f0f0f0',
+                                color: selectedCategory === null ? '#fff' : '#333',
+                                borderColor: selectedCategory === null ? '#E91E63' : '#ccc'
+                            }}
                          >
-                             <CategoryText>Todas</CategoryText>
+                             <CategoryText style={{color: 'inherit'}}>Todas</CategoryText> {/* Garante herança da cor */}
                         </CategoryButton>
                         {/* Botões por Categoria */}
                         {categories.map((category) => (
@@ -759,114 +855,150 @@ export default function Home() {
              <div style={{ marginBottom: '20px' }}>
                 <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>Adicionar Produto Rápido</h2>
                 <CategoryContainer>
-                    {/* Filtra produtos (fixos + firebase) pela categoria selecionada ou mostra todos */}
+                    {/* Combina produtos fixos e do Firebase */}
                     {[...fixedProducts, ...products]
-                        // Filtro para evitar duplicatas se um fixo também vier do Firebase
-                        .filter((product, index, self) =>
-                            index === self.findIndex((p) => (p.id === product.id || p.name === product.name))
-                        )
-                        // Filtro por categoria selecionada
+                         // Remove duplicatas por ID (prioriza o do Firebase se ID for igual)
+                         .reduce((acc, current) => {
+                            if (!acc.find(item => item.id === current.id)) {
+                                acc.push(current);
+                            }
+                            return acc;
+                         }, [] as Product[])
+                        // Filtra por categoria selecionada (ou mostra todos se null)
                         .filter(p => selectedCategory === null || p.category === selectedCategory)
+                        // Ordena alfabeticamente por nome (opcional)
+                        .sort((a, b) => a.name.localeCompare(b.name))
                         .map((product) => (
-                        <CategoryButton
-                            key={product.id} // Usa ID como chave
+                        <CategoryButton // Usando CategoryButton estilizado como base
+                            key={product.id} // Usa ID como chave única
                             onClick={() => addToOrder(product)}
                             title={`Adicionar ${product.name} - R$ ${formatCurrency(product.price)}`}
-                            // Estilo um pouco diferente para produtos
-                            style={{ flexBasis: '150px', height: '80px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}
+                            // Estilo específico para produtos
+                            style={{
+                                flexBasis: '180px', // Um pouco mais largo
+                                height: 'auto',    // Altura automática
+                                padding: '10px 15px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                background: '#fff', // Fundo branco para produtos
+                                border: '1px solid #ddd',
+                                boxShadow: '2px 2px 5px rgba(0,0,0,0.05)'
+                             }}
                         >
-                             <ProductText style={{ fontWeight: 'normal', fontSize: '14px', margin: 0 }}>{product.name}</ProductText>
-                             <ProductText style={{ fontWeight: 'bold', fontSize: '14px', margin: '5px 0 0 0' }}>R$ {formatCurrency(product.price)}</ProductText>
+                             <ProductText style={{ fontWeight: 500, fontSize: '15px', margin: 0, color: '#333' }}>{product.name}</ProductText>
+                             <ProductText style={{ fontWeight: 'bold', fontSize: '14px', margin: '5px 0 0 0', color: '#E91E63' }}>R$ {formatCurrency(product.price)}</ProductText>
                         </CategoryButton>
                     ))}
+                     {/* Mensagem se nenhum produto for encontrado para a categoria */}
+                     {[...fixedProducts, ...products].filter(p => selectedCategory === null || p.category === selectedCategory).length === 0 && (
+                        <p style={{width: '100%', textAlign: 'center', color: '#777'}}>Nenhum produto encontrado {selectedCategory ? `na categoria "${selectedCategory}"` : ''}.</p>
+                     )}
                 </CategoryContainer>
             </div>
 
 
-			{/* Dados do Cliente (Inputs) */}
+			{/* Dados do Cliente */}
             <div style={{ margin: '30px 0', border: '1px solid #ddd', padding: '20px', borderRadius: '8px', background: '#f9f9f9' }}>
                 <h2 style={{ marginTop: '0', marginBottom: '15px', fontSize: '18px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>Dados do Cliente</h2>
                 <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <label htmlFor="customerNameInput" style={{ minWidth: '80px', textAlign: 'right' }}>Nome:</label>
+                    <label htmlFor="customerNameInput" style={{ minWidth: '80px', textAlign: 'right', fontWeight: 500 }}>Nome:</label>
                     <TableInput
                         id="customerNameInput"
                         type="text"
-                        placeholder="Nome completo"
+                        placeholder="Nome completo do cliente"
                         value={customerName}
                         onChange={(e) => handleCustomerNameChange(e.target.value)}
-                        style={{ flexGrow: 1 }} // Ocupa espaço restante
+                        style={{ flexGrow: 1, textAlign: 'left' }} // Alinha à esquerda
+                        required // Adiciona validação básica HTML5
                     />
                 </div>
                 <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <label htmlFor="customerAddressInput" style={{ minWidth: '80px', textAlign: 'right' }}>Endereço:</label>
+                    <label htmlFor="customerAddressInput" style={{ minWidth: '80px', textAlign: 'right', fontWeight: 500 }}>Endereço:</label>
                     <TableInput
                         id="customerAddressInput"
                         type="text"
-                        placeholder="Rua, Número, Bairro..."
+                        placeholder="Rua, Número, Bairro, Referência..."
                         value={customerAddress}
                         onChange={(e) => handleCustomerAddressChange(e.target.value)}
-                         style={{ flexGrow: 1 }}
+                         style={{ flexGrow: 1, textAlign: 'left' }}
+                         required
                     />
                 </div>
-                <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <label htmlFor="customerPhoneInput" style={{ minWidth: '80px', textAlign: 'right' }}>Telefone:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label htmlFor="customerPhoneInput" style={{ minWidth: '80px', textAlign: 'right', fontWeight: 500 }}>Telefone:</label>
                     <TableInput
                         id="customerPhoneInput"
-                        type="tel" // Tipo 'tel' ajuda em dispositivos móveis
+                        type="tel" // Tipo 'tel' para semântica e teclado mobile
                         placeholder="(XX) XXXXX-XXXX"
                         value={customerPhone}
                         onChange={(e) => handleCustomerPhoneChange(e.target.value)}
-                        maxLength={16} // Ajuste ex: (XX) XXXXX-XXXX
-                         style={{ flexGrow: 1 }}
+                        maxLength={15} // (XX) XXXXX-XXXX
+                         style={{ flexGrow: 1, textAlign: 'left' }}
+                         required
+                         pattern="\(\d{2}\)\s\d{4,5}-\d{4}" // Padrão de validação HTML5 (opcional)
+                         title="Formato esperado: (XX) XXXXX-XXXX ou (XX) XXXX-XXXX"
                     />
                 </div>
             </div>
 
             {/* Adicionar Item Manualmente */}
-            <div style={{ margin: '30px 0', border: '1px solid #ddd', padding: '20px', borderRadius: '8px' }}>
+            <div style={{ margin: '30px 0', border: '1px solid #ddd', padding: '20px', borderRadius: '8px', background: '#fff' }}>
                  <h2 style={{ marginTop: '0', marginBottom: '15px', fontSize: '18px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>Adicionar Item Manualmente</h2>
-                {/* Usando TableHeader para layout */}
-                <TableHeader style={{ alignItems: 'flex-end', gap: '15px' }}> {/* Alinha na base e aumenta o espaço */}
-                    <div style={{flex: 3}}> {/* Mais espaço para o nome */}
-                        <span style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>Item</span>
+                <TableHeader style={{ alignItems: 'flex-end', gap: '15px', flexWrap: 'wrap' }}> {/* Permite quebrar linha em telas menores */}
+                    {/* Item */}
+                    <div style={{flex: '1 1 250px'}}> {/* Base flexível, cresce */}
+                        <span style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: 500 }}>Item</span>
                         <TableInput
                             type="text"
-                            placeholder="Nome do item"
+                            placeholder="Nome do item ou serviço"
                             value={selectedItem}
                             onChange={(e) => handleSelectedItemChange(e.target.value)}
+                            style={{ textAlign: 'left' }}
                         />
                     </div>
-                    <div style={{flex: 1}}>
-                        <span style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>Qtde</span>
+                     {/* Quantidade */}
+                    <div style={{flex: '0 1 80px'}}> {/* Não cresce, base fixa */}
+                        <span style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: 500 }}>Qtde</span>
                         <TableInput
                             type="number"
                             placeholder="Qtde"
-                            value={selectedQuantity === 0 ? '' : selectedQuantity} // Mostra vazio se for 0
+                            value={selectedQuantity === 0 ? '' : selectedQuantity.toString()} // Mostra vazio se 0, converte para string
                             onChange={(e) => handleQuantityChange(setSelectedQuantity, e.target.value)}
-                            min="1" // Mínimo 1 aqui? Ou permite 0?
+                            min="1" // Mínimo 1 para adicionar?
+                            style={{ textAlign: 'center' }}
                         />
                     </div>
-                    <div style={{flex: 1.5}}>
-                        <span style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>Unit. (R$)</span>
+                    {/* Preço Unitário */}
+                    <div style={{flex: '0 1 120px'}}>
+                        <span style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: 500 }}>Unit. (R$)</span>
                         <TableInput
-                            type="text" // Tipo texto para aceitar vírgula e formatação
+                            type="text" // Permite digitar vírgula
                             inputMode="decimal" // Teclado numérico em mobile
                             placeholder="0,00"
-                            value={selectedUnitPrice === 0 ? '' : formatCurrency(selectedUnitPrice)} // Formata, mostra vazio se 0
-                            // Chama o handler que usa parseCurrency
+                            // Exibe o valor formatado apenas se houver valor > 0
+                            value={selectedUnitPrice > 0 ? formatCurrency(selectedUnitPrice) : ''}
+                            // Chama o handler que parseia a string para número
                             onChange={(e) => handleSelectedUnitPriceChange(e.target.value)}
+                            style={{ textAlign: 'right' }}
                         />
                     </div>
-                    <div style={{flex: 1.5}}>
-                        <span style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>Total (R$)</span>
+                    {/* Total Calculado */}
+                    <div style={{flex: '0 1 120px'}}>
+                        <span style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: 500 }}>Total (R$)</span>
                         {/* Mostra total calculado, não é um input */}
-                        <div style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '5px', backgroundColor: '#eee', minHeight: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
+                        <div style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '5px', backgroundColor: '#eee', minHeight: '38px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: '16px', fontWeight: 'bold' }}>
                            {formatCurrency(manualItemTotal)}
                         </div>
                     </div>
-                     {/* Botão de adicionar item manual */}
-                     <div style={{ flexShrink: 0 }}> {/* Evita que o botão encolha */}
-                        <NextButton onClick={addManualEntry} style={{ padding: '8px 15px', fontSize: '14px', marginBottom: '1px' }}>
+                     {/* Botão Adicionar */}
+                     <div style={{ flexShrink: 0, alignSelf: 'flex-end' }}> {/* Não encolhe, alinha na base */}
+                        <NextButton
+                           onClick={addManualEntry}
+                           style={{ padding: '8px 15px', fontSize: '14px', minHeight: '38px', marginBottom: '0' }} // Ajusta altura e margem
+                           title="Adicionar este item ao pedido"
+                        >
                             <NextButtonText>+ Adicionar</NextButtonText>
                         </NextButton>
                     </div>
@@ -878,26 +1010,26 @@ export default function Home() {
             <div style={{ margin: '30px 0' }}>
                  <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>Itens no Pedido Atual</h2>
                 {orderItems.length > 0 ? (
-                    <div style={{ border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}> {/* Borda em volta da tabela */}
+                    <div style={{ border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
                         {/* Cabeçalho Tabela */}
-                        <TableHeader style={{ background: '#f2f2f2', padding: '10px', borderBottom: '1px solid #ddd', gap: '10px', marginBottom: 0 }}>
-                            <TableCell style={{ flex: 3, textAlign: 'left', fontWeight: 'bold' }}>Item</TableCell>
+                        <TableHeader style={{ background: '#f2f2f2', padding: '10px', borderBottom: '1px solid #ddd', gap: '10px', marginBottom: 0, flexWrap: 'nowrap' }}>
+                            <TableCell style={{ flex: 3, textAlign: 'left', fontWeight: 'bold', paddingLeft: '5px' }}>Item</TableCell>
                             <TableCell style={{ flex: 1, textAlign: 'center', fontWeight: 'bold' }}>Qtde</TableCell>
                             <TableCell style={{ flex: 1.5, textAlign: 'center', fontWeight: 'bold' }}>Unit. (R$)</TableCell>
-                            <TableCell style={{ flex: 1.5, textAlign: 'right', fontWeight: 'bold' }}>Total (R$)</TableCell>
+                            <TableCell style={{ flex: 1.5, textAlign: 'right', fontWeight: 'bold', paddingRight: '5px' }}>Total (R$)</TableCell>
                             <TableCell style={{ flex: 0.5, textAlign: 'center', fontWeight: 'bold' }}>Ação</TableCell>
                         </TableHeader>
                         {/* Corpo Tabela */}
-                        <TableBody style={{ maxHeight: '400px', overflowY: 'auto', marginTop: 0 }}> {/* Altura máxima e scroll */}
+                        <TableBody style={{ maxHeight: '400px', overflowY: 'auto', marginTop: 0, background: '#fff' }}>
                             {orderItems.map((item) => (
-                                <TableRow key={item.id} style={{ borderBottom: '1px solid #eee', padding: '8px 10px', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0 }}>
-                                    {/* Nome do Item (Editável) */}
+                                <TableRow key={item.id} style={{ borderBottom: '1px solid #eee', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0 }}>
+                                    {/* Nome Item (Editável) */}
                                     <TableCell style={{ flex: 3 }}>
                                         <TableInput
                                             type="text"
                                             value={item.name}
-                                            onChange={(e) => updateItemName(item.id, e.target.value)} // Atualiza nome
-                                            style={{ border: 'none', background: 'transparent', padding: '5px', width: '100%', textAlign: 'left' }}
+                                            onChange={(e) => updateItemName(item.id, e.target.value)}
+                                            style={{ border: 'none', background: 'transparent', padding: '5px', width: '100%', textAlign: 'left', fontSize: '15px' }}
                                             title="Clique para editar o nome"
                                         />
                                     </TableCell>
@@ -905,38 +1037,39 @@ export default function Home() {
                                     <TableCell style={{ flex: 1, textAlign: 'center' }}>
                                         <TableInput
                                             type="number"
-                                            value={item.quantity}
-                                            onChange={(e) => updateQuantity(item.id, parseInt(e.target.value, 10) || 0)}
-                                            min="0" // Permite zerar
-                                            style={{ width: '65px', padding: '5px' }}
+                                            value={item.quantity.toString()} // Input type number espera string
+                                            onChange={(e) => updateQuantity(item.id, parseInt(e.target.value, 10))}
+                                            min="0" // Permite zerar quantidade (para talvez remover depois?)
+                                            style={{ width: '65px', padding: '5px', fontSize: '15px' }}
                                             title="Clique para editar a quantidade"
                                         />
                                     </TableCell>
                                      {/* Preço Unitário (Editável) */}
-                                    <TableCell style={{ flex: 1.5, textAlign: 'center' }}>
-                                         <TableInput
-                                            type="text" // text para formatação/digitação com vírgula
-                                            inputMode="decimal"
-                                            // Exibe o valor formatado do estado (número)
-                                            value={formatCurrency(item.unitPrice)}
-                                            // Ao mudar, chama a função que parseia a string para número e atualiza
-                                            onChange={(e) => updateItemUnitPrice(item.id, e.target.value)} // Passa string
-                                            style={{ width: '90px', padding: '5px' }}
-                                            title="Clique para editar o preço unitário (ex: 120,21)"
-                                        />
-                                    </TableCell>
-                                    {/* Total do Item (Calculado) */}
-                                    <TableCell style={{ flex: 1.5, textAlign: 'right', padding: '5px', fontWeight: '500' }}>
+                                     <TableCell style={{ flex: 1.5, textAlign: 'center' }}>
+                                            <TableInput
+                                                type="text" // text para formatação/digitação com vírgula
+                                                inputMode="decimal"
+                                                // O value continua mostrando formatado, a mágica está no onChange/parseCurrency
+                                                value={formatCurrency(item.unitPrice)}
+                                                // A função updateItemUnitPrice usa parseCurrency, que já lida com "122,58"
+                                                onChange={(e) => updateItemUnitPrice(item.id, e.target.value)}
+                                                // AUMENTE A LARGURA AQUI: de 90px para 120px ou mais, conforme necessário
+                                                style={{ width: '120px', padding: '5px', textAlign: 'right', fontSize: '15px' }}
+                                                title="Clique para editar o preço unitário (ex: 122,58)"
+                                            />
+                                        </TableCell>
+                                    {/* Total Item (Calculado) */}
+                                    <TableCell style={{ flex: 1.5, textAlign: 'right', padding: '5px 10px', fontWeight: '500', fontSize: '15px' }}>
                                         {formatCurrency(item.total)}
                                     </TableCell>
-                                    {/* Botão Remover Item */}
+                                    {/* Botão Remover */}
                                     <TableCell style={{ flex: 0.5, textAlign: 'center' }}>
                                         <button
                                             onClick={() => removeFromOrder(item.id)}
                                             title="Remover este item"
-                                            style={{ background: 'none', border: 'none', color: '#E91E63', cursor: 'pointer', fontSize: '20px', padding: 0 }}
+                                            style={{ background: 'none', border: 'none', color: '#E91E63', cursor: 'pointer', fontSize: '24px', padding: 0, lineHeight: 1 }}
                                         >
-                                            × {/* Ou use o ícone 🗑️ */}
+                                            × {/* X mais elegante */}
                                         </button>
                                     </TableCell>
                                 </TableRow>
@@ -944,22 +1077,35 @@ export default function Home() {
                         </TableBody>
                          {/* Rodapé Tabela */}
                         <TableFooter style={{ background: '#f2f2f2', padding: '15px 10px', borderTop: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 0 }}>
-                             {/* Botão para remover todos os itens */}
+                            {/* Botão Limpar Itens */}
                             <button
                                 onClick={removeAllItems}
                                 title="Remover todos os itens do pedido"
-                                disabled={orderItems.length === 0} // Desabilita se não houver itens
-                                style={{ background: '#ff5252', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', opacity: orderItems.length === 0 ? 0.5 : 1 }}
+                                disabled={orderItems.length === 0}
+                                style={{
+                                     background: orderItems.length > 0 ? '#ff5252' : '#aaa',
+                                     color: 'white',
+                                     border: 'none',
+                                     padding: '8px 12px',
+                                     borderRadius: '4px',
+                                     cursor: orderItems.length > 0 ? 'pointer' : 'not-allowed',
+                                     fontSize: '14px',
+                                     opacity: orderItems.length === 0 ? 0.6 : 1,
+                                     display: 'flex',
+                                     alignItems: 'center',
+                                     gap: '5px'
+                                }}
                              >
-                                🗑️ Limpar Itens
+                                 {/* Ícone de lixeira */} Limpar Itens
                             </button>
-                            {/* Total Geral do Pedido */}
-                            <TotalText style={{ margin: 0 }}>Total do Pedido: R$ {formatCurrency(totalPrice)}</TotalText>
+                            {/* Total Geral */}
+                            <TotalText style={{ margin: 0, fontSize: '18px' }}>Total do Pedido: R$ {formatCurrency(totalPrice)}</TotalText>
                         </TableFooter>
                     </div>
                 ) : (
-                    <p style={{ textAlign: 'center', color: '#777', padding: '20px', border: '1px dashed #ddd', borderRadius: '8px' }}>
-                        Nenhum item adicionado a este pedido ainda.
+                     // Mensagem se não houver itens
+                    <p style={{ textAlign: 'center', color: '#777', padding: '20px', border: '1px dashed #ddd', borderRadius: '8px', background: '#fafafa' }}>
+                        Nenhum item adicionado a este pedido ainda. Use os botões acima ou adicione manualmente.
                     </p>
                 )}
             </div>
@@ -971,27 +1117,18 @@ export default function Home() {
                 {/* Forma de Pagamento */}
                 <div style={{ marginBottom: '15px' }}>
                     <span style={{ marginRight: '15px', fontWeight: '500' }}>Forma:</span>
-                    <label style={{ marginRight: '20px', cursor: 'pointer' }}>
-                        <input
-                            type="radio"
-                            name="paymentMethod"
-                            value="Dinheiro"
-                            checked={paymentMethod === "Dinheiro"}
-                            onChange={(e) => setPaymentMethod(e.target.value)}
-                            style={{ marginRight: '5px' }}
-                        /> Dinheiro
-                    </label>
-                    <label style={{ cursor: 'pointer' }}>
-                        <input
-                            type="radio"
-                            name="paymentMethod"
-                            value="Pix"
-                            checked={paymentMethod === "Pix"}
-                            onChange={(e) => setPaymentMethod(e.target.value)}
-                             style={{ marginRight: '5px' }}
-                        /> Pix
-                    </label>
-                    {/* Adicione mais formas de pagamento se necessário */}
+                    {['Dinheiro', 'Pix', 'Cartão Débito', 'Cartão Crédito'].map(method => ( // Adiciona mais opções se quiser
+                         <label key={method} style={{ marginRight: '20px', cursor: 'pointer', fontSize: '15px' }}>
+                            <input
+                                type="radio"
+                                name="paymentMethod"
+                                value={method}
+                                checked={paymentMethod === method}
+                                onChange={(e) => setPaymentMethod(e.target.value)}
+                                style={{ marginRight: '5px', verticalAlign: 'middle' }}
+                            /> {method}
+                        </label>
+                    ))}
                 </div>
 
                 {/* Valor Pago */}
@@ -999,12 +1136,12 @@ export default function Home() {
                     <label htmlFor="paymentValueInput" style={{ minWidth: '90px', fontWeight: '500', textAlign: 'right' }}>Valor Pago:</label>
                      <TableInput
                         id="paymentValueInput"
-                        type="text" // text para formatação
-                        inputMode="decimal" // teclado numérico
+                        type="text" // Permite formatação
+                        inputMode="decimal" // Teclado numérico
                         placeholder="0,00"
-                        value={paymentValue} // Estado formatado
-                        onChange={(e) => handlePaymentValueChange(e.target.value)} // Handler que formata
-                        style={{ width: '150px' }} // Largura fixa
+                        value={paymentValue} // Mostra estado formatado (string)
+                        onChange={(e) => handlePaymentValueChange(e.target.value)} // Handler que formata e atualiza
+                        style={{ width: '150px', textAlign: 'right' }} // Largura fixa, alinha à direita
                     />
                 </div>
 
@@ -1019,19 +1156,21 @@ export default function Home() {
             </div>
 
 			{/* Botão Finalizar/Próximo */}
-            {/* Desabilita se não houver pedido ativo ou itens */}
 			<NextButton
                 onClick={goToOrderView}
+                // Desabilita se não houver ID ou itens
                 disabled={!currentOrderId || orderItems.length === 0}
-                title={!currentOrderId ? "Crie um Novo Pedido primeiro" : (orderItems.length === 0 ? "Adicione itens ao pedido" : "Finalizar e ir para visualização")}
+                title={!currentOrderId ? "Crie um 'Novo Pedido' primeiro" : (orderItems.length === 0 ? "Adicione itens ao pedido para poder finalizar" : "Finalizar e ir para visualização")}
                 style={{
                     marginTop: '30px',
                     width: '100%',
                     padding: '18px',
                     fontSize: '18px',
-                    backgroundColor: (!currentOrderId || orderItems.length === 0) ? '#aaa' : '#007BFF', // Cor diferente se desabilitado
-                    cursor: (!currentOrderId || orderItems.length === 0) ? 'not-allowed' : 'pointer', // Cursor diferente
-                    opacity: (!currentOrderId || orderItems.length === 0) ? 0.6 : 1
+                    // Usa a cor primária definida nos estilos ou um azul padrão
+                    backgroundColor: (!currentOrderId || orderItems.length === 0) ? '#aaa' : '#007BFF',
+                    cursor: (!currentOrderId || orderItems.length === 0) ? 'not-allowed' : 'pointer',
+                    opacity: (!currentOrderId || orderItems.length === 0) ? 0.6 : 1,
+                    border: 'none', // Garante que não tem borda do browser
                  }}
              >
 				<NextButtonText>FINALIZAR E VISUALIZAR PEDIDO</NextButtonText>

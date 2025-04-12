@@ -1,5 +1,9 @@
 // src/app/types.ts
 // src/app/types.ts
+// src/app/types.ts - VERSÃO CORRIGIDA
+
+// src/app/types.ts - VERSÃO CORRIGIDA COM ADIÇÃO
+
 export interface Product {
     id: string;
     name: string;
@@ -7,6 +11,7 @@ export interface Product {
     price: number;
 }
 
+// --- INTERFACE OrderItem CORRIGIDA ---
 export interface OrderItem {
     id: string;
     name: string;
@@ -14,11 +19,10 @@ export interface OrderItem {
     unitPrice: number;
     total: number;
     category: string;
-    customerName: string;
-    customerAddress: string;
-    customerPhone: string;
 }
+// --- FIM DA CORREÇÃO ---
 
+// --- Interface Order (COM ADIÇÃO DO CAMPO observation) ---
 export interface Order {
     orderId: string;
     items: OrderItem[];
@@ -26,11 +30,20 @@ export interface Order {
     customerName: string;
     customerAddress: string;
     customerPhone: string;
+
+    // Outros campos importantes do pedido
+    paymentValue?: number;
+    createdAt?: string | null;
+    status?: 'aberto' | 'entregue' | 'cancelado' | string;
+    totalOrderValue?: number;
+    paymentMethod?: string; // Exemplo
+    observation?: string; // <<< NOVO CAMPO ADICIONADO
 }
 
-// ADICIONE ESTA LINHA:
+// Interface auxiliar (opcional)
 export interface FirebaseOrderItemData {
-  name?: string;  // Use '?' para indicar propriedades opcionais
+  id?: string;
+  name?: string;
   quantity?: number;
   unitPrice?: number;
   total?: number;
