@@ -1,4 +1,5 @@
 // src/app/Home/index.tsx
+// src/app/Home/index.tsx
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "expo-router";
 import {
@@ -223,20 +224,25 @@ export default function Home() {
 	}, [currentOrderId]);
 
 	// --- Funções de Manipulação de Estado Local ---
+
+    // ****** INÍCIO DA CORREÇÃO ******
+    // Modificada para NÃO limpar os dados do cliente
     const clearOrderState = () => {
-        setOrderItems([]);
-        setCustomerName("");
-        setCustomerAddress("");
-        setCustomerPhone("");
-        setPaymentMethod("Dinheiro");
-        setPaymentValue("");
-        setSelectedItem("");
-        setSelectedUnitPrice(0);
-        setSelectedQuantity(1);
-        setSelectedCategory(null);
+        setOrderItems([]); // Limpa os itens do pedido
+        // setCustomerName("");      // NÃO limpa mais o nome do cliente
+        // setCustomerAddress("");   // NÃO limpa mais o endereço do cliente
+        // setCustomerPhone("");     // NÃO limpa mais o telefone do cliente
+        setPaymentMethod("Dinheiro"); // Reseta o método de pagamento
+        setPaymentValue("");       // Reseta o valor pago
+        setSelectedItem("");       // Limpa o campo de item manual
+        setSelectedUnitPrice(0);   // Limpa o campo de preço unitário manual
+        setSelectedQuantity(1);    // Reseta a quantidade manual
+        setSelectedCategory(null);   // Reseta o filtro de categoria
         // Não limpa currentOrderId aqui, pois pode ser chamado ao iniciar um novo pedido
-        console.log("Estado local do formulário/pedido limpo.");
+        console.log("Estado local do pedido (itens, pagamento, item manual) limpo. Dados do cliente MANTIDOS.");
     }
+    // ****** FIM DA CORREÇÃO ******
+
 
 	// --- Funções de Interação com Firebase ---
 
@@ -252,15 +258,15 @@ export default function Home() {
         if (newOrderId) {
             console.log("Novo ID de pedido gerado:", newOrderId);
             // 3. Limpa o estado local do formulário ANTES de salvar no Firebase e definir o ID no estado
-            clearOrderState();
+            clearOrderState(); // Chama a versão CORRIGIDA de clearOrderState
             // 4. Define o ID do pedido atual no estado (isso disparará o useEffect para buscar, mas estará vazio)
             setCurrentOrderId(newOrderId);
 
             // 5. Define a estrutura de dados inicial que será salva
             const initialOrderData = {
-                customerName: "",
-                customerAddress: "",
-                customerPhone: "", // Salvo sem formatação inicialmente
+                customerName: customerName,         // <--- Usa o valor atual do estado do cliente
+                customerAddress: customerAddress,   // <--- Usa o valor atual do estado do cliente
+                customerPhone: customerPhone.replace(/\D/g, ''), // <--- Usa o valor atual (sem formatação)
                 paymentMethod: "Dinheiro",
                 paymentValue: 0,
                 itens: {}, // Começa sem itens
@@ -424,7 +430,7 @@ export default function Home() {
 			setOrderItems((prevItems) => [...prevItems, newOrderItem]); // Adiciona ao estado local
             console.log("Item manual adicionado com sucesso:", newOrderItem.name);
 
-            // Limpa os campos de entrada manual
+            // Limpa SOMENTE os campos de entrada manual após adicionar
             setSelectedItem("");
             setSelectedUnitPrice(0);
             setSelectedQuantity(1);
