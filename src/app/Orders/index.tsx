@@ -1,6 +1,4 @@
 // src/app/Orders/index.tsx
-// src/app/Orders/index.tsx
-
 // Adicionar useRef e useCallback aos imports do React
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { database } from '../../services/firebaseConfig';
@@ -11,7 +9,7 @@ import {
     Title,
     OrderItemContainer,
     OrderIdText,
-    OrderItemDetailsText,
+    OrderItemDetailsText, // Usaremos este para as novas datas
     OrderTotalText,
     ButtonsContainer,
     StyledButton,
@@ -19,29 +17,29 @@ import {
     StyledView,
     OrdersListContainer,
     OrderStatusContainer,
-    TimeBadge,
+    TimeBadge, // Mantido por enquanto
     PaymentBadge,
     StatusBadge,
     colors,
     fontSize,
-    spacing, // <<< IMPORTAR spacing SE NECESSÁRIO PARA MARGENS
-    StyledTextArea, // <<< IMPORTAR O NOVO ESTILO
+    spacing,
+    StyledTextArea,
 } from './styles';
-// Importa os tipos CORRIGIDOS de '../types' - Order já deve ter 'observation'
+// Importa os tipos CORRIGIDOS de '../types'
 import { Order, OrderItem } from '../types';
 
 // --- Interfaces ---
-// Esta interface estende a 'Order' corrigida e adiciona observation
 interface OrderWithPayment extends Order {
     paymentValue?: number;
     createdAt?: string | null;
+    closedAt?: string | null; // <<< NOVO CAMPO PARA DATA DE FECHAMENTO
     status?: 'aberto' | 'entregue' | 'cancelado' | string;
     totalOrderValue?: number;
-    observation?: string; // <<< ADICIONADO AQUI
+    observation?: string;
 }
 
-// --- Funções Utilitárias (sem alterações) ---
-// ... (formatCurrency, formatPhoneNumber, etc. permanecem iguais) ...
+// --- Funções Utilitárias ---
+
 const formatCurrency = (value: number | null | undefined): string => {
     const numericValue = value ?? 0;
     return numericValue.toLocaleString("pt-BR", {
@@ -70,16 +68,17 @@ const formatPhoneNumber = (value: string | undefined | null): string => {
 };
 
 const calculateMinutesElapsed = (isoDateString: string | null | undefined): number | null => {
+    // (Função original mantida, usada pelo TimeBadge e Alertas)
     if (!isoDateString) return null;
     try {
         const pastDate = new Date(isoDateString);
         const now = new Date();
         if (isNaN(pastDate.getTime())) {
-           console.warn("Data inválida recebida:", isoDateString);
+           console.warn("Data inválida recebida para cálculo de minutos:", isoDateString);
            return null;
         }
         const diffMs = now.getTime() - pastDate.getTime();
-        if (diffMs < 0) return null;
+        if (diffMs < 0) return 0; // Trata como 0 se for futuro
         return Math.floor(diffMs / (1000 * 60));
     } catch (e) {
         console.error("Erro ao parsear data para cálculo de minutos:", isoDateString, e);
@@ -88,6 +87,7 @@ const calculateMinutesElapsed = (isoDateString: string | null | undefined): numb
 };
 
 const formatTimeElapsed = (minutes: number | null): string => {
+    // (Função original mantida, usada pelo TimeBadge e Alertas)
     if (minutes === null) return "Tempo Indisp.";
     if (minutes < 1) return "Agora";
     if (minutes < 60) return `${minutes} min`;
@@ -96,25 +96,96 @@ const formatTimeElapsed = (minutes: number | null): string => {
     if (remainingMinutes === 0) return `${hours}h`;
     return `${hours}h ${remainingMinutes}min`;
 };
+
+// <<< NOVA FUNÇÃO: Formatar Data e Hora (dd/MM/yyyy HH:mm) >>>
+const formatDateTime = (isoDateString: string | null | undefined): string => {
+    if (!isoDateString) return "Data Indisp.";
+    try {
+        const date = new Date(isoDateString);
+        if (isNaN(date.getTime())) {
+            console.warn("Data inválida recebida para formatação:", isoDateString);
+            return "Data Inválida";
+        }
+        // Formato: DD/MM/AAAA HH:MM
+        return date.toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false // Formato 24h
+        });
+    } catch (e) {
+        console.error("Erro ao formatar data/hora:", isoDateString, e);
+        return "Erro na Data";
+    }
+};
+
+// <<< NOVA FUNÇÃO: Calcular Duração Detalhada (Anos, Meses, Dias) >>>
+const calculateDurationDetailed = (startIso: string | null | undefined, endIsoOrNowIso: string | null | undefined): string => {
+    if (!startIso || !endIsoOrNowIso) return "Duração Indisp.";
+
+    try {
+        const startDate = new Date(startIso);
+        const endDate = new Date(endIsoOrNowIso); // Pode ser a data de fechamento ou a data atual
+
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            console.warn("Datas inválidas para cálculo de duração detalhada:", startIso, endIsoOrNowIso);
+            return "Datas Inválidas";
+        }
+
+        let diffMs = endDate.getTime() - startDate.getTime();
+        if (diffMs < 0) {
+             console.warn("Data final anterior à inicial na duração detalhada:", startIso, endIsoOrNowIso);
+             diffMs = 0; // Evitar duração negativa
+        }
+
+        if (diffMs === 0) return "Menos de 1 dia"; // Ou "Imediato"
+
+        // Cálculo aproximado de anos, meses e dias
+        const totalDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (totalDays === 0) return "Menos de 1 dia"; // Menos de 24h
+
+        const years = Math.floor(totalDays / 365); // Simplificação
+        const remainingDaysAfterYears = totalDays % 365;
+        const months = Math.floor(remainingDaysAfterYears / 30); // Simplificação
+        const days = remainingDaysAfterYears % 30;
+
+        let durationString = "";
+        if (years > 0) {
+            durationString += `${years} ano${years > 1 ? 's' : ''}`;
+        }
+        if (months > 0) {
+            durationString += `${durationString ? ', ' : ''}${months} mes${months > 1 ? 'es' : ''}`; // Corrigido: 'meses'
+        }
+        if (days > 0) {
+            durationString += `${durationString ? ', ' : ''}${days} dia${days > 1 ? 's' : ''}`;
+        }
+
+        return durationString || "Menos de 1 dia"; // Fallback
+
+    } catch (e) {
+        console.error("Erro ao calcular duração detalhada:", startIso, endIsoOrNowIso, e);
+        return "Erro na Duração";
+    }
+};
 // --- Fim Funções Utilitárias ---
 
 
-// --- Componente ObservationInput --- <<< NOVO COMPONENTE INTERNO
+// --- Componente ObservationInput --- (sem alterações)
 interface ObservationInputProps {
     orderId: string;
-    initialValue: string; // Valor inicial vindo do Firebase
+    initialValue: string;
 }
-
 const ObservationInput: React.FC<ObservationInputProps> = ({ orderId, initialValue }) => {
     const [text, setText] = useState(initialValue);
     const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Atualiza o estado local se o valor inicial (do Firebase) mudar externamente
     useEffect(() => {
         setText(initialValue);
     }, [initialValue]);
 
-    // Função para salvar no Firebase (será debounced)
     const saveObservation = useCallback(async (newText: string) => {
         console.log(`[ObservationInput] Salvando observação para ${orderId}: "${newText}"`);
         try {
@@ -123,35 +194,27 @@ const ObservationInput: React.FC<ObservationInputProps> = ({ orderId, initialVal
             console.log(`[ObservationInput] Observação para ${orderId} salva com sucesso.`);
         } catch (error) {
             console.error(`[ObservationInput] Erro ao salvar observação para ${orderId}:`, error);
-            // Poderia adicionar um feedback visual de erro aqui
         }
-    }, [orderId]); // Depende apenas do orderId
+    }, [orderId]);
 
-    // Efeito para lidar com o debouncing
     useEffect(() => {
-        // Limpa o timeout anterior se o texto mudar novamente antes de salvar
         if (debounceTimeoutRef.current) {
             clearTimeout(debounceTimeoutRef.current);
         }
-
-        // Só agenda o salvamento se o texto atual for diferente do inicial
-        // Isso evita salvar na montagem inicial ou se o texto não mudou
         if (text !== initialValue) {
             debounceTimeoutRef.current = setTimeout(() => {
                 saveObservation(text);
-            }, 1500); // Salva 1.5 segundo (1500ms) após parar de digitar
+            }, 1500);
         }
-
-        // Limpa o timeout ao desmontar o componente ou antes do próximo efeito
         return () => {
             if (debounceTimeoutRef.current) {
                 clearTimeout(debounceTimeoutRef.current);
             }
         };
-    }, [text, initialValue, saveObservation]); // Depende do texto atual, valor inicial e da função de salvar
+    }, [text, initialValue, saveObservation]);
 
     const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setText(event.target.value); // Atualiza o estado local imediatamente
+        setText(event.target.value);
     };
 
     return (
@@ -159,7 +222,7 @@ const ObservationInput: React.FC<ObservationInputProps> = ({ orderId, initialVal
             value={text}
             onChange={handleChange}
             placeholder="Adicionar observação..."
-            rows={3} // Sugestão de altura inicial
+            rows={3}
         />
     );
 };
@@ -187,8 +250,7 @@ const Orders = () => {
                         console.warn(`[Orders] Ignorando dado inválido para orderId ${orderId}:`, orderData);
                         return null;
                     }
-
-                    // Mapeia os itens
+                    // Mapeamento de itens (sem alterações)
                     const items: OrderItem[] = orderData.itens && typeof orderData.itens === 'object'
                         ? Object.values(orderData.itens).map((item: any): OrderItem => ({
                             id: item?.id ?? Math.random().toString(36).substring(7),
@@ -199,16 +261,18 @@ const Orders = () => {
                             category: item?.category ?? 'Sem Categoria',
                         }))
                         : [];
-
-                    // Calcula totais e outros campos
+                    // Cálculos (sem alterações)
                     const calculatedTotalFromItems = items.reduce((sum, item) => sum + (item?.total ?? 0), 0);
                     const total = typeof orderData.totalOrderValue === 'number' && orderData.totalOrderValue >= 0
                                      ? orderData.totalOrderValue
                                      : calculatedTotalFromItems;
                     const paymentValue = typeof orderData.paymentValue === 'number' ? orderData.paymentValue : 0;
+
+                    // <<< LER createdAt e closedAt >>>
                     const createdAt = orderData.createdAt || null;
+                    const closedAt = orderData.closedAt || null; // Lê o novo campo
                     const status = orderData.status || 'aberto';
-                    const observation = orderData.observation || ''; // <<< LER A OBSERVAÇÃO DO FIREBASE
+                    const observation = orderData.observation || '';
 
                     // Monta o objeto OrderWithPayment
                     return {
@@ -220,20 +284,21 @@ const Orders = () => {
                         customerPhone: orderData.customerPhone || '',
                         paymentValue: paymentValue,
                         createdAt: createdAt,
+                        closedAt: closedAt, // <<< INCLUIR NO OBJETO
                         status: status,
                         totalOrderValue: total,
-                        observation: observation, // <<< INCLUIR NO OBJETO
+                        observation: observation,
                     };
                   });
 
                 const filteredList: OrderWithPayment[] = mappedList
                     .filter((order: OrderWithPayment | null): order is OrderWithPayment => order !== null);
 
-                // Ordena a lista
+                // Ordena a lista (sem alterações)
                 filteredList.sort((a, b) => {
                     const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
                     const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                    return timeB - timeA; // Mais recentes primeiro
+                    return timeB - timeA;
                 });
 
                 console.log(`[Orders] Processados ${filteredList.length} pedidos.`);
@@ -249,16 +314,48 @@ const Orders = () => {
             setOrders([]);
         });
 
-        // Função de limpeza para remover o listener ao desmontar
+        // Função de limpeza (sem alterações)
         return () => {
             console.log("[Orders] Removendo listener de /pedidos");
             unsubscribe();
         };
-    }, []); // Array de dependências vazio, executa apenas na montagem
+    }, []);
 
-    // --- Funções Handler (sem alterações necessárias aqui) ---
+    // --- Funções Handler ---
+
+    // <<< MODIFICAR handleChangeOrderStatus para incluir closedAt >>>
+    const handleChangeOrderStatus = async (orderId: string, newStatus: 'aberto' | 'entregue' | 'cancelado') => {
+        console.log(`[DEBUG] Iniciando handleChangeOrderStatus para ID: ${orderId}, Novo Status: ${newStatus}`);
+        if (!orderId) {
+            console.warn("[DEBUG] Tentativa de mudar status sem ID.");
+            alert("ID do pedido inválido.");
+            return;
+        }
+        try {
+            const orderRef = ref(database, `pedidos/${orderId}`);
+            const updateData: { status: string; closedAt?: string | null } = {
+                status: newStatus
+            };
+
+            if (newStatus === 'entregue' || newStatus === 'cancelado') {
+                updateData.closedAt = new Date().toISOString(); // Grava data de fechamento
+                console.log(`[DEBUG] Definindo closedAt para ${updateData.closedAt}`);
+            } else if (newStatus === 'aberto') {
+                updateData.closedAt = null; // Remove data de fechamento ao reabrir
+                 console.log(`[DEBUG] Removendo closedAt (definindo como null)`);
+            }
+
+            await update(orderRef, updateData);
+
+            console.log(`[DEBUG] Status do pedido ${orderId} atualizado para ${newStatus}.`);
+        } catch (error) {
+            console.error(`[DEBUG] Erro ao atualizar status do pedido ${orderId} para ${newStatus}:`, error);
+            alert("Erro ao atualizar status do pedido.");
+        }
+    };
+
+    // --- Outras Funções Handler (handleDeleteOrder, handleEditOrder, handleMarkAsPaid, handleMarkAsOwed - sem alterações) ---
     const handleDeleteOrder = async (orderId: string) => {
-        // ... (código existente)
          console.log(`[DEBUG] Iniciando handleDeleteOrder para ID: ${orderId}`);
         if (!orderId) {
             console.warn("[DEBUG] Tentativa de deletar pedido sem ID.");
@@ -282,7 +379,6 @@ const Orders = () => {
     };
 
     const handleEditOrder = (orderId: string) => {
-        // ... (código existente)
           console.log(`[DEBUG] Iniciando handleEditOrder para ID: ${orderId}`);
          if (!orderId) {
             console.warn("[DEBUG] Tentativa de editar pedido sem ID.");
@@ -291,7 +387,7 @@ const Orders = () => {
         }
         try {
             router.push({
-                pathname: '/OrderView', // Confirme se a rota está correta
+                pathname: '/OrderView',
                 params: { orderId: orderId },
             });
         } catch (error) {
@@ -300,26 +396,7 @@ const Orders = () => {
         }
     };
 
-    const handleChangeOrderStatus = async (orderId: string, newStatus: 'aberto' | 'entregue' | 'cancelado') => {
-        // ... (código existente)
-        console.log(`[DEBUG] Iniciando handleChangeOrderStatus para ID: ${orderId}, Novo Status: ${newStatus}`);
-        if (!orderId) {
-            console.warn("[DEBUG] Tentativa de mudar status sem ID.");
-            alert("ID do pedido inválido.");
-            return;
-        }
-        try {
-            const orderRef = ref(database, `pedidos/${orderId}`);
-            await update(orderRef, { status: newStatus });
-            console.log(`[DEBUG] Status do pedido ${orderId} atualizado para ${newStatus}.`);
-        } catch (error) {
-            console.error(`[DEBUG] Erro ao atualizar status do pedido ${orderId} para ${newStatus}:`, error);
-            alert("Erro ao atualizar status do pedido.");
-        }
-    };
-
-    const handleMarkAsPaid = async (orderId: string, totalAmount: number) => {
-        // ... (código existente)
+     const handleMarkAsPaid = async (orderId: string, totalAmount: number) => {
         console.log(`[DEBUG] Iniciando handleMarkAsPaid para ID: ${orderId}, Valor: ${totalAmount}`);
         if (!orderId) {
             console.warn("[DEBUG] Tentativa de marcar como pago sem ID.");
@@ -342,7 +419,6 @@ const Orders = () => {
     };
 
     const handleMarkAsOwed = async (orderId: string) => {
-        // ... (código existente)
         console.log(`[DEBUG] Iniciando handleMarkAsOwed para ID: ${orderId}`);
         if (!orderId) {
             console.warn("[DEBUG] Tentativa de marcar como devido sem ID.");
@@ -361,76 +437,105 @@ const Orders = () => {
     // --- Fim Funções Handler ---
 
 
-    // --- Função de Renderização de Item da Lista (COM A MODIFICAÇÃO) ---
+    // --- Função de Renderização de Item da Lista ---
     const renderItem = ({ item: order }: { item: OrderWithPayment }) => {
-        // Cálculos de tempo, status de pagamento, etc. (sem alterações)
+        // Cálculos existentes
         const minutesElapsed = calculateMinutesElapsed(order.createdAt);
-        const timeElapsedText = formatTimeElapsed(minutesElapsed);
+        const timeElapsedText = formatTimeElapsed(minutesElapsed); // Mantido para o badge
         const orderTotal = order.total ?? 0;
         const paymentValue = order.paymentValue ?? 0;
         const isPaid = orderTotal > 0 && paymentValue >= orderTotal;
         const isOwed = orderTotal > 0 && paymentValue < orderTotal;
         const paymentStatusText = isPaid ? "Pago" : (isOwed ? "Pendente" : (orderTotal === 0 ? "Sem Valor" : "Pendente"));
         const orderStatus = order.status || 'aberto';
+        const isClosed = order.status === 'entregue' || order.status === 'cancelado';
+
+        // <<< NOVOS CÁLCULOS E FORMATAÇÕES DE DATA/DURAÇÃO >>>
+        const formattedCreatedAt = formatDateTime(order.createdAt);
+        const formattedClosedAt = isClosed ? formatDateTime(order.closedAt) : null; // Formata só se estiver fechado
+        // Para duração, usa closedAt se existir e estiver fechado, senão usa a data/hora atual
+        const endDateForCalc = isClosed && order.closedAt ? order.closedAt : new Date().toISOString();
+        const durationText = calculateDurationDetailed(order.createdAt, endDateForCalc);
 
         return (
             <OrderItemContainer key={order.orderId}>
                 <OrderIdText>Pedido: {order.orderId}</OrderIdText>
 
-                {/* Badges de Status */}
+                {/* Badges de Status (Estrutura Original Mantida) */}
                 <OrderStatusContainer>
                     <TimeBadge timeDifferenceMinutes={minutesElapsed}>{timeElapsedText}</TimeBadge>
                     <PaymentBadge isPaid={isPaid && orderTotal > 0}>{paymentStatusText}</PaymentBadge>
                     <StatusBadge status={orderStatus}>{orderStatus.charAt(0).toUpperCase() + orderStatus.slice(1)}</StatusBadge>
                 </OrderStatusContainer>
 
-                 {/* Alertas de tempo */}
-                 {/* ... (código existente) ... */}
-                  {minutesElapsed !== null && minutesElapsed >= 60 && isOwed && orderStatus === 'aberto' && (
-                    <OrderItemDetailsText style={{ color: colors.danger, fontWeight: 'bold', marginTop: '5px' }}>
+                 {/* <<< EXIBIR DATAS E DURAÇÃO DETALHADA ABAIXO DOS BADGES >>> */}
+                 {/* Usando OrderItemDetailsText para manter o estilo base, mas com fonte menor */}
+                 <StyledView style={{ marginTop: spacing.small }}> {/* Adiciona um pequeno espaço */}
+                    <OrderItemDetailsText style={{ fontSize: fontSize.small, marginBottom: '2px' }}> {/* Fonte pequena e menos margem */}
+                        <strong>Criado em:</strong> {formattedCreatedAt}
+                    </OrderItemDetailsText>
+                    {/* Mostra Fechado em apenas se estiver fechado e tiver a data */}
+                    {isClosed && formattedClosedAt && (
+                         <OrderItemDetailsText style={{ fontSize: fontSize.small, marginBottom: '2px' }}>
+                            <strong>Fechado em:</strong> {formattedClosedAt}
+                         </OrderItemDetailsText>
+                    )}
+                    {/* Mostra a duração calculada (até agora se aberto, total se fechado) */}
+                     <OrderItemDetailsText style={{ fontSize: fontSize.small, marginBottom: '2px', fontStyle: 'italic', color: colors.secondary }}>
+                        ({isClosed ? 'Tempo total' : 'Tempo aberto'}): {durationText}
+                     </OrderItemDetailsText>
+                 </StyledView>
+                 {/* <<< FIM DATAS E DURAÇÃO >>> */}
+
+
+                 {/* Alertas de tempo (Estrutura Original Mantida) */}
+                 {minutesElapsed !== null && minutesElapsed >= 60 && isOwed && orderStatus === 'aberto' && (
+                    <OrderItemDetailsText style={{ color: colors.danger, fontWeight: 'bold', marginTop: spacing.medium }}> {/* Mais espaço acima */}
                         ALERTA: Aberto há mais de 1 hora e Pendente!
                     </OrderItemDetailsText>
                  )}
                  {minutesElapsed !== null && minutesElapsed >= 30 && minutesElapsed < 60 && isOwed && orderStatus === 'aberto' && (
-                    <OrderItemDetailsText style={{ color: colors.warning, fontWeight: 'bold', marginTop: '5px' }}>
+                    <OrderItemDetailsText style={{ color: colors.warning, fontWeight: 'bold', marginTop: spacing.medium }}> {/* Mais espaço acima */}
                         Aviso: Aberto há mais de 30 min e Pendente.
                     </OrderItemDetailsText>
                  )}
 
-                {/* Detalhes do Cliente */}
-                <OrderItemDetailsText>Cliente: {order.customerName}</OrderItemDetailsText>
+                {/* Detalhes do Cliente (Estrutura Original Mantida) */}
+                 {/* Adicionar um título/separador para clareza */}
+                <StyledText style={{ fontWeight: 'bold', marginTop: spacing.medium, borderTop: `1px dashed ${colors.gray}`, paddingTop: spacing.small }}>
+                    Detalhes do Cliente:
+                </StyledText>
+                <OrderItemDetailsText>Nome: {order.customerName}</OrderItemDetailsText>
                 <OrderItemDetailsText>Endereço: {order.customerAddress}</OrderItemDetailsText>
                 <OrderItemDetailsText>Telefone: {formatPhoneNumber(order.customerPhone)}</OrderItemDetailsText>
 
-                {/* --- CAMPO DE OBSERVAÇÃO ADICIONADO --- */}
-                <StyledView style={{ marginTop: spacing.medium }}> {/* Adiciona espaço acima */}
+
+                {/* --- Campo de Observação (Estrutura Original Mantida) --- */}
+                <StyledView style={{ marginTop: spacing.medium }}>
                      <StyledText style={{ fontWeight: 'bold', marginBottom: spacing.xsmall }}>Observação:</StyledText>
                      <ObservationInput
                          orderId={order.orderId}
-                         initialValue={order.observation || ''} // Passa o valor atual ou string vazia
+                         initialValue={order.observation || ''}
                      />
                 </StyledView>
-                {/* --- FIM DO CAMPO DE OBSERVAÇÃO --- */}
 
-                {/* Lista de Itens */}
+                {/* Lista de Itens (Estrutura Original Mantida) */}
                 {order.items && order.items.length > 0 && (
                      <StyledText style={{ marginTop: spacing.medium, fontWeight: 'bold', borderTop: `1px solid ${colors.gray}`, paddingTop: spacing.small }}>Itens:</StyledText>
                 )}
                 {order.items && order.items.length > 0 ? (
                     order.items.map((item: OrderItem, index: number) => (
-                        <StyledView key={item.id || `item-${index}`} style={{ marginLeft: '10px', fontSize: fontSize.small }}>
-                            <OrderItemDetailsText>
-                                - {item.name} ({item.quantity}x R$ {formatCurrency(item.unitPrice ?? 0)}) = R$ {formatCurrency(item.total ?? 0)}
-                                {item.category ? ` [${item.category}]` : ''}
-                            </OrderItemDetailsText>
-                        </StyledView>
+                        // Usando um estilo mais simples para a lista de itens
+                        <p key={item.id || `item-${index}`} style={{ fontSize: fontSize.small, margin: `2px 0 2px ${spacing.medium}`, lineHeight: 1.4 }}>
+                            - {item.name} ({item.quantity}x R$ {formatCurrency(item.unitPrice ?? 0)}) = R$ {formatCurrency(item.total ?? 0)}
+                            {item.category ? ` [${item.category}]` : ''}
+                        </p>
                     ))
                 ) : (
                     <StyledText style={{ fontStyle: 'italic', color: colors.secondary, marginTop: '5px' }}>Nenhum item neste pedido.</StyledText>
                 )}
 
-                {/* Total e Status de Pagamento Detalhado */}
-                 {/* ... (código existente) ... */}
+                {/* Total e Status de Pagamento Detalhado (Estrutura Original Mantida) */}
                  <OrderTotalText style={{ marginTop: '15px' }}>
                     Total do Pedido: R$ {formatCurrency(orderTotal)}
                 </OrderTotalText>
@@ -447,20 +552,18 @@ const Orders = () => {
                  )}
 
 
-                {/* Container de Botões */}
+                {/* Container de Botões (Estrutura Original Mantida) */}
                 <ButtonsContainer>
-                    {/* Botões de Status de Entrega (mantidos) */}
                     {order.status === 'aberto' && (
                         <>
                             <StyledButton variant="success" onClick={() => handleChangeOrderStatus(order.orderId, 'entregue')}>Entregue</StyledButton>
                             <StyledButton variant="warning" onClick={() => handleChangeOrderStatus(order.orderId, 'cancelado')}>Cancelar</StyledButton>
                         </>
                     )}
-                    {order.status === 'entregue' && (
+                    {(order.status === 'entregue' || order.status === 'cancelado') && ( // Botão para reabrir
                          <StyledButton variant="secondary" onClick={() => handleChangeOrderStatus(order.orderId, 'aberto')} title="Reverter status para 'Aberto'">Marcar Aberto</StyledButton>
                     )}
 
-                    {/* Botões de Pagamento (mantidos) */}
                     {!isPaid && orderTotal > 0 && order.status !== 'cancelado' && (
                          <StyledButton variant="success" onClick={() => handleMarkAsPaid(order.orderId, orderTotal)} title={`Marcar R$ ${formatCurrency(orderTotal)} como pago`}>Pago</StyledButton>
                     )}
@@ -468,7 +571,6 @@ const Orders = () => {
                          <StyledButton variant="warning" onClick={() => handleMarkAsOwed(order.orderId)} title="Marcar como devido (Zerar valor pago)">Devido</StyledButton>
                     )}
 
-                    {/* Botões Gerais (mantidos) */}
                     <StyledButton variant="danger" onClick={() => handleDeleteOrder(order.orderId)}>Excluir</StyledButton>
                     <StyledButton variant="primary" onClick={() => handleEditOrder(order.orderId)}>Ver / Editar</StyledButton>
                 </ButtonsContainer>
@@ -476,7 +578,7 @@ const Orders = () => {
         );
     };
 
-    // --- Renderização Principal do Componente ---
+    // --- Renderização Principal do Componente (sem alterações) ---
     return (
         <Container>
             <Title>Histórico de Pedidos</Title>

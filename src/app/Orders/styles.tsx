@@ -25,9 +25,9 @@ export const spacing = {
 
 export const fontSize = {
     xsmall: "12px",
-    small: "14px",
-    medium: "16px",
-    large: "18px",
+    small: "14px",  // Usado nos badges
+    medium: "16px", // Usado nos botões e ID do pedido
+    large: "18px",  // <<< Usado agora para detalhes do cliente e total
     xlarge: "20px",
     title: "28px",
     subtitle: "22px",
@@ -116,22 +116,26 @@ export const OrderItemContainer = styled.div`
 `;
 
 export const OrderIdText = styled.p`
-  font-size: ${fontSize.medium};
+  font-size: ${fontSize.medium}; /* Tamanho médio para o ID */
   color: ${colors.primary};
   font-weight: 600;
   margin-bottom: ${spacing.small};
   word-break: break-all; /* Quebra IDs longos se necessário */
 `;
 
+// --- TEXTO DOS DETALHES COM FONTE MAIOR ---
 export const OrderItemDetailsText = styled.p`
-  font-size: ${fontSize.medium};
+  /* font-size: ${fontSize.medium}; <-- VALOR ANTERIOR (16px) */
+  font-size: ${fontSize.large}; /* <<< NOVO VALOR (18px) */
   color: ${colors.dark};
-  margin-bottom: ${spacing.xsmall};
-  line-height: 1.5;
+  margin-bottom: ${spacing.xsmall}; /* Espaço abaixo de cada linha de detalhe */
+  font-weight: 500; /* Torna a fonte um pouco mais 'cheia' (mantido) */
+  line-height: 1.6; /* Aumenta o espaço entre as linhas (mantido) */
 `;
+// --- FIM DA ALTERAÇÃO ---
 
 export const OrderTotalText = styled.p`
-  font-size: ${fontSize.large};
+  font-size: ${fontSize.large}; /* Mantido grande para destaque */
   color: ${colors.dark};
   font-weight: 600;
   margin-top: ${spacing.medium};
@@ -151,7 +155,7 @@ export const ButtonsContainer = styled.div`
 // Definindo tipos mais explicitos para as variantes de botão
 type ButtonVariant = "primary" | "danger" | 'secondary' | 'success' | 'warning';
 
-// Ajustando o StyledButton para aceitar mais variantes ou usar estilo inline
+// --- BOTÃO COM TAMANHO AUMENTADO (das modificações anteriores) ---
 export const StyledButton = styled.button<{ variant?: ButtonVariant }>`
   background-color: ${props => {
     switch (props.variant) {
@@ -164,16 +168,20 @@ export const StyledButton = styled.button<{ variant?: ButtonVariant }>`
     }
   }};
   color: ${props => (props.variant === 'warning' ? colors.dark : colors.white)}; /* Texto escuro para warning */
-  padding: ${spacing.small} ${spacing.medium};
+
+  /* === ALTERAÇÕES PARA BOTÕES MAIORES === */
+  padding: 10px 20px;             /* Aumenta o padding vertical e horizontal */
+  font-size: ${fontSize.medium};  /* Aumenta o tamanho da fonte (16px) */
+  min-width: 100px;               /* Aumenta a largura mínima (opcional, ajuste se necessário) */
+  /* ======================================= */
+
   border: none;
   border-radius: ${borderRadius.medium};
-  font-size: ${fontSize.small};
   font-weight: 500;
   cursor: pointer;
   transition: background-color ${transition.fast}, transform ${transition.fast}, box-shadow ${transition.fast}, opacity ${transition.fast};
   box-shadow: ${boxShadow.small};
   outline: none;
-  min-width: 90px;
   text-align: center;
   white-space: nowrap;
 
@@ -195,6 +203,7 @@ export const StyledButton = styled.button<{ variant?: ButtonVariant }>`
     box-shadow: none;
   }
 `;
+// --- FIM DO BOTÃO ALTERADO ---
 
 export const StyledText = styled.p`
   font-size: ${fontSize.medium};
@@ -215,16 +224,21 @@ export const OrderStatusContainer = styled.div`
     margin-bottom: ${spacing.medium};
 `;
 
+// --- BADGE BASE COM TAMANHO AUMENTADO (das modificações anteriores) ---
 const BaseBadge = styled.div`
-    padding: ${spacing.xsmall} ${spacing.small};
+    /* === NOVOS VALORES PARA BADGES MAIORES === */
+    padding: 6px 12px;            /* Padding ligeiramente maior */
+    font-size: ${fontSize.small}; /* Tamanho da fonte aumentado para 14px */
+    /* ========================================= */
+
     border-radius: ${borderRadius.pill};
-    font-size: ${fontSize.xsmall};
     font-weight: 600;
     color: ${colors.white};
     text-align: center;
     white-space: nowrap;
     line-height: 1.4;
 `;
+// --- FIM DA ALTERAÇÃO NO BADGE BASE ---
 
 export const TimeBadge = styled(BaseBadge)<{ timeDifferenceMinutes: number | null }>`
     background-color: ${props => {
@@ -234,6 +248,7 @@ export const TimeBadge = styled(BaseBadge)<{ timeDifferenceMinutes: number | nul
         if (minutes >= 30) return colors.warning;
         return colors.success;
     }};
+    /* Ajuste de cor do texto para melhor contraste em badges amarelos/vermelhos */
     color: ${props => props.timeDifferenceMinutes !== null && props.timeDifferenceMinutes >= 30 ? colors.dark : colors.white};
 `;
 
@@ -252,15 +267,14 @@ export const StatusBadge = styled(BaseBadge)<{ status: string }>`
     }};
 `;
 
-// --- Estilo para o campo de Observação --- // <<< NOVO ESTILO ADICIONADO
+// --- Estilo para o campo de Observação --- //
 export const StyledTextArea = styled.textarea`
   width: 100%; /* Ocupa toda a largura disponível */
   min-height: 60px; /* Altura mínima */
   padding: ${spacing.small};
-  /* Removido margin-top daqui, será controlado no layout pai */
   border: 1px solid ${colors.gray};
   border-radius: ${borderRadius.medium};
-  font-size: ${fontSize.small};
+  font-size: ${fontSize.small}; /* Tamanho da fonte da área de texto */
   color: ${colors.dark};
   background-color: ${colors.white};
   box-sizing: border-box;
