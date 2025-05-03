@@ -1,18 +1,18 @@
 import styled, { css } from "styled-components";
 
-//--- Theme Variables ---//
+//--- Variáveis de Tema (Cores, Espaçamentos, Fontes, etc.) ---//
 export const colors = {
-    primary: "#007bff",      // Azul primário
-    secondary: "#6c757d",    // Cinza secundário
-    light: "#f8f9fa",        // Fundo claro
-    dark: "#343a40",         // Texto escuro
-    white: "#fff",           // Branco
-    gray: "#e9ecef",         // Cinza claro para bordas/fundos
-    mediumGray: "#adb5bd",   // Cinza médio para textos secundários
-    success: "#28a745",      // Verde sucesso
-    danger: "#dc3545",       // Vermelho perigo
-    warning: "#ffc107",      // Amarelo aviso (bom para 'Cancelar')
-    info: "#17a2b8",         // Azul informação (bom para status 'Aberto')
+    primary: "#007bff",      // Azul Principal
+    secondary: "#6c757d",    // Cinza Secundário
+    light: "#f8f9fa",        // Fundo Claro (Página)
+    dark: "#343a40",         // Texto Escuro Principal
+    white: "#ffffff",        // Branco
+    gray: "#dee2e6",         // Cinza Claro (Bordas, Separadores)
+    mediumGray: "#adb5bd",   // Cinza Médio (Textos secundários, Placeholders)
+    success: "#28a745",      // Verde Sucesso (Pago, Entregue)
+    danger: "#dc3545",       // Vermelho Perigo (Pendente, Cancelado, Excluir, Débito)
+    warning: "#ffc107",      // Amarelo Aviso (Parcialmente Pago, Cancelar Ação)
+    info: "#17a2b8",         // Azul Informação (Aberto)
 };
 
 export const spacing = {
@@ -24,25 +24,26 @@ export const spacing = {
 };
 
 export const fontSize = {
-    xsmall: "12px",
-    small: "14px",  // Usado nos badges
-    medium: "16px", // Usado nos botões e ID do pedido
-    large: "18px",  // <<< Usado agora para detalhes do cliente e total
-    xlarge: "20px",
-    title: "28px",
+    xsmall: "12px", // Itens do pedido, talvez?
+    small: "14px",  // Badges, Datas, Detalhes menores
+    medium: "16px", // Texto padrão, Botões, ID Pedido
+    large: "18px",  // Detalhes Cliente, Total Pedido
+    xlarge: "20px", // Títulos menores
     subtitle: "22px",
+    title: "28px",  // Título Principal da Página
 };
 
 export const borderRadius = {
     small: "4px",
-    medium: "8px",
+    medium: "8px",  // Padrão para containers e botões
     large: "12px",
-    pill: "50px", // Para badges
+    pill: "50px", // Para Badges
 };
 
 export const boxShadow = {
-    small: "0px 2px 4px rgba(0, 0, 0, 0.08)",
-    medium: "0px 4px 8px rgba(0, 0, 0, 0.12)",
+    small: "0 1px 3px rgba(0, 0, 0, 0.1)",
+    medium: "0 4px 8px rgba(0, 0, 0, 0.12)",
+    large: "0 6px 12px rgba(0, 0, 0, 0.15)",
 };
 
 export const transition = {
@@ -51,17 +52,16 @@ export const transition = {
 };
 
 
-//--- Styled Components ---//
+//--- Componentes Estilizados ---//
 
 export const Container = styled.div`
-  height: 100vh; /* Altura total da viewport */
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-height: 100vh; /* Garante que ocupe pelo menos a altura da tela */
   background-color: ${colors.light};
   padding: ${spacing.medium};
   box-sizing: border-box;
-  overflow: hidden; /* Evita scroll no container principal */
 `;
 
 export const Title = styled.h1`
@@ -73,16 +73,16 @@ export const Title = styled.h1`
 `;
 
 export const OrdersListContainer = styled.div`
-  flex-grow: 1; /* Ocupa o espaço vertical disponível */
   width: 100%;
-  max-width: 800px; /* Largura máxima para melhor leitura */
-  overflow-y: auto; /* Habilita scroll APENAS nesta área */
-  padding: 0 ${spacing.small}; /* Espaçamento lateral */
-  margin-bottom: ${spacing.medium};
+  max-width: 900px; /* Aumenta um pouco a largura máxima */
+  margin-bottom: ${spacing.large}; /* Mais espaço antes do botão Voltar */
+  overflow-y: auto; /* Scroll vertical apenas se necessário */
+  flex-grow: 1; /* Permite que esta área cresça para preencher o espaço */
+  padding: 0 ${spacing.small};
 
-  /* Estilização da barra de rolagem (Webkit - Chrome/Safari/Edge) */
+  /* Estilização da barra de rolagem (Opcional, para Webkit) */
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 10px;
   }
   &::-webkit-scrollbar-track {
     background: ${colors.gray};
@@ -106,45 +106,49 @@ export const OrderItemContainer = styled.div`
   border: 1px solid ${colors.gray};
   box-shadow: ${boxShadow.small};
   transition: transform ${transition.fast}, box-shadow ${transition.fast};
-  width: 100%; /* Garante ocupar a largura do container pai */
+  width: 100%;
   box-sizing: border-box;
 
   &:hover {
-    transform: translateY(-2px);
+    /* Efeito sutil de elevação */
+    /* transform: translateY(-2px); */
     box-shadow: ${boxShadow.medium};
   }
 `;
 
 export const OrderIdText = styled.p`
-  font-size: ${fontSize.medium}; /* Tamanho médio para o ID */
+  font-size: ${fontSize.medium};
   color: ${colors.primary};
-  font-weight: 600;
+  font-weight: 700; /* Mais destaque para o ID */
   margin-bottom: ${spacing.small};
-  word-break: break-all; /* Quebra IDs longos se necessário */
+  word-break: break-all;
 `;
 
-// --- TEXTO DOS DETALHES COM FONTE MAIOR ---
 export const OrderItemDetailsText = styled.p`
-  /* font-size: ${fontSize.medium}; <-- VALOR ANTERIOR (16px) */
-  font-size: ${fontSize.large}; /* <<< NOVO VALOR (18px) */
+  font-size: ${fontSize.medium}; /* Aumentado para melhor leitura dos detalhes */
   color: ${colors.dark};
-  margin-bottom: ${spacing.xsmall}; /* Espaço abaixo de cada linha de detalhe */
-  font-weight: 500; /* Torna a fonte um pouco mais 'cheia' (mantido) */
-  line-height: 1.6; /* Aumenta o espaço entre as linhas (mantido) */
+  margin-bottom: ${spacing.small}; /* Espaço entre linhas de detalhe */
+  line-height: 1.5; /* Espaçamento entre linhas */
+
+  strong {
+    font-weight: 600; /* Destaque para labels */
+    color: ${colors.secondary}; /* Cor diferente para labels */
+    margin-right: ${spacing.xsmall};
+  }
 `;
-// --- FIM DA ALTERAÇÃO ---
 
 export const OrderTotalText = styled.p`
-  font-size: ${fontSize.large}; /* Mantido grande para destaque */
+  font-size: ${fontSize.large}; /* Tamanho grande para o total */
   color: ${colors.dark};
-  font-weight: 600;
-  margin-top: ${spacing.medium};
-  text-align: right;
+  font-weight: 700; /* Bem destacado */
+  margin-top: ${spacing.small};
+  margin-bottom: ${spacing.small};
+  text-align: right; /* Alinhado à direita */
 `;
 
 export const ButtonsContainer = styled.div`
   display: flex;
-  flex-wrap: wrap; /* Permite que botões quebrem linha em telas menores */
+  flex-wrap: wrap; /* Quebra linha em telas menores */
   justify-content: flex-end; /* Alinha botões à direita */
   gap: ${spacing.small}; /* Espaço entre botões */
   margin-top: ${spacing.medium};
@@ -152,10 +156,9 @@ export const ButtonsContainer = styled.div`
   border-top: 1px solid ${colors.gray}; /* Linha separadora */
 `;
 
-// Definindo tipos mais explicitos para as variantes de botão
-type ButtonVariant = "primary" | "danger" | 'secondary' | 'success' | 'warning';
+// Tipos para as variantes de botão
+type ButtonVariant = "primary" | "danger" | 'secondary' | 'success' | 'warning' | 'info';
 
-// --- BOTÃO COM TAMANHO AUMENTADO (das modificações anteriores) ---
 export const StyledButton = styled.button<{ variant?: ButtonVariant }>`
   background-color: ${props => {
     switch (props.variant) {
@@ -163,27 +166,25 @@ export const StyledButton = styled.button<{ variant?: ButtonVariant }>`
       case 'secondary': return colors.secondary;
       case 'success': return colors.success;
       case 'warning': return colors.warning;
+      case 'info': return colors.info;
       case 'primary':
       default: return colors.primary;
     }
   }};
   color: ${props => (props.variant === 'warning' ? colors.dark : colors.white)}; /* Texto escuro para warning */
 
-  /* === ALTERAÇÕES PARA BOTÕES MAIORES === */
-  padding: 10px 20px;             /* Aumenta o padding vertical e horizontal */
-  font-size: ${fontSize.medium};  /* Aumenta o tamanho da fonte (16px) */
-  min-width: 100px;               /* Aumenta a largura mínima (opcional, ajuste se necessário) */
-  /* ======================================= */
-
+  padding: 8px 16px; /* Padding um pouco menor para não ficar gigante */
+  font-size: ${fontSize.small}; /* Fonte ligeiramente menor para botões */
   border: none;
   border-radius: ${borderRadius.medium};
-  font-weight: 500;
+  font-weight: 600; /* Fonte mais forte */
   cursor: pointer;
-  transition: background-color ${transition.fast}, transform ${transition.fast}, box-shadow ${transition.fast}, opacity ${transition.fast};
+  transition: background-color ${transition.fast}, opacity ${transition.fast}, box-shadow ${transition.fast};
   box-shadow: ${boxShadow.small};
   outline: none;
   text-align: center;
-  white-space: nowrap;
+  white-space: nowrap; /* Evita que o texto do botão quebre linha */
+  min-width: 90px; /* Largura mínima para consistência */
 
   &:hover {
     opacity: 0.85;
@@ -191,28 +192,29 @@ export const StyledButton = styled.button<{ variant?: ButtonVariant }>`
   }
 
   &:active {
-    transform: translateY(1px);
-    box-shadow: none;
     opacity: 1;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.2); /* Efeito pressionado */
   }
 
   &:disabled {
     background-color: ${colors.mediumGray};
+    color: ${colors.light};
     cursor: not-allowed;
-    opacity: 0.6;
+    opacity: 0.7;
     box-shadow: none;
   }
 `;
-// --- FIM DO BOTÃO ALTERADO ---
 
 export const StyledText = styled.p`
   font-size: ${fontSize.medium};
   color: ${colors.dark};
   margin: ${spacing.small} 0;
+  line-height: 1.5;
 `;
 
 export const StyledView = styled.div`
-  margin-bottom: ${spacing.small};
+  /* Usado como um container genérico para espaçamento e agrupamento */
+  /* Exemplo: margin-bottom: ${spacing.small}; */
 `;
 
 // --- Estilos para Badges de Status --- //
@@ -221,39 +223,38 @@ export const OrderStatusContainer = styled.div`
     display: flex;
     flex-wrap: wrap;
     gap: ${spacing.small};
-    margin-bottom: ${spacing.medium};
+    margin-bottom: ${spacing.medium}; /* Espaço abaixo dos badges */
+    align-items: center; /* Alinha verticalmente se quebrar linha */
 `;
 
-// --- BADGE BASE COM TAMANHO AUMENTADO (das modificações anteriores) ---
 const BaseBadge = styled.div`
-    /* === NOVOS VALORES PARA BADGES MAIORES === */
-    padding: 6px 12px;            /* Padding ligeiramente maior */
-    font-size: ${fontSize.small}; /* Tamanho da fonte aumentado para 14px */
-    /* ========================================= */
-
-    border-radius: ${borderRadius.pill};
-    font-weight: 600;
-    color: ${colors.white};
+    padding: 5px 12px; /* Padding interno do badge */
+    font-size: ${fontSize.xsmall}; /* Fonte pequena para badges */
+    border-radius: ${borderRadius.pill}; /* Formato de pílula */
+    font-weight: 700; /* Negrito */
+    color: ${colors.white}; /* Cor padrão do texto */
     text-align: center;
     white-space: nowrap;
-    line-height: 1.4;
+    line-height: 1.3; /* Ajuste fino da altura da linha */
+    text-transform: uppercase; /* Opcional: deixa em maiúsculas */
+    letter-spacing: 0.5px; /* Opcional: espaçamento leve entre letras */
 `;
-// --- FIM DA ALTERAÇÃO NO BADGE BASE ---
 
 export const TimeBadge = styled(BaseBadge)<{ timeDifferenceMinutes: number | null }>`
     background-color: ${props => {
         const minutes = props.timeDifferenceMinutes;
         if (minutes === null) return colors.mediumGray;
-        if (minutes >= 60) return colors.danger;
-        if (minutes >= 30) return colors.warning;
-        return colors.success;
+        if (minutes >= 120) return colors.danger; // Mais de 2h = Vermelho
+        if (minutes >= 60) return colors.warning; // Mais de 1h = Amarelo
+        return colors.info; // Menos de 1h = Azul Info
     }};
-    /* Ajuste de cor do texto para melhor contraste em badges amarelos/vermelhos */
-    color: ${props => props.timeDifferenceMinutes !== null && props.timeDifferenceMinutes >= 30 ? colors.dark : colors.white};
+    color: ${props => props.timeDifferenceMinutes !== null && props.timeDifferenceMinutes >= 60 ? colors.dark : colors.white}; /* Texto escuro em amarelo */
 `;
 
+// O 'isPaid' aqui pode ser usado para um estilo base, mas a cor dinâmica no index.tsx prevalecerá
 export const PaymentBadge = styled(BaseBadge)<{ isPaid: boolean }>`
     background-color: ${props => props.isPaid ? colors.success : colors.danger};
+    /* A cor será sobrescrita pelo 'style' inline no componente Orders */
 `;
 
 export const StatusBadge = styled(BaseBadge)<{ status: string }>`
@@ -262,30 +263,30 @@ export const StatusBadge = styled(BaseBadge)<{ status: string }>`
             case 'entregue': return colors.success;
             case 'cancelado': return colors.danger;
             case 'aberto': return colors.info;
-            default: return colors.secondary;
+            default: return colors.secondary; // Cor padrão para status desconhecidos
         }
     }};
 `;
 
 // --- Estilo para o campo de Observação --- //
 export const StyledTextArea = styled.textarea`
-  width: 100%; /* Ocupa toda a largura disponível */
-  min-height: 60px; /* Altura mínima */
+  width: 100%;
+  min-height: 60px;
   padding: ${spacing.small};
   border: 1px solid ${colors.gray};
   border-radius: ${borderRadius.medium};
-  font-size: ${fontSize.small}; /* Tamanho da fonte da área de texto */
+  font-size: ${fontSize.small};
   color: ${colors.dark};
   background-color: ${colors.white};
   box-sizing: border-box;
-  resize: vertical; /* Permite redimensionar verticalmente */
+  resize: vertical; /* Permite redimensionar só verticalmente */
   line-height: 1.4;
   transition: border-color ${transition.fast}, box-shadow ${transition.fast};
 
   &:focus {
     outline: none;
     border-color: ${colors.primary};
-    box-shadow: 0 0 0 2px ${colors.primary}30; /* Sombra suave no foco */
+    box-shadow: 0 0 0 3px ${colors.primary}40; /* Sombra suave azul no foco */
   }
 
   &::placeholder {
